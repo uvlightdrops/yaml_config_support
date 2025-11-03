@@ -3,7 +3,7 @@ import os
 import glob
 import re
 import yaml
-from utils import setup_logger
+from flowpy.utils import setup_logger
 from pathlib import Path, PosixPath
 
 logger = setup_logger(__name__, __name__+'.log')
@@ -69,6 +69,7 @@ class YamlConfigSupport:
         self.set_phase_subdir()
 
         if self.app_type == 'tree':
+            pass
             self.additional_yaml_config_logic()
 
         # Local overlay dict
@@ -78,6 +79,7 @@ class YamlConfigSupport:
             self.apply_local()
 
         # XXX self.cfg_local not defined without phase arg
+        # OFF ypipe # self.cfg_si = self.cfg_kp_si
         self.cfg_si = self.cfg_kp_si
         # A meta config / also files and paths
         # self.cfg_si = self.load_config('cfg_si.yml')
@@ -113,11 +115,12 @@ class YamlConfigSupport:
         # if len(self.phase.split('_')) == 1:
         if re.match('p\d+', self.phase):
             # the condition means, if just ie p3 is given and not p3_mysepcialphase
-            self.phase_subdir = glob.glob(self.phase + '_*', root_dir=self.config_dir)
-            logger.debug('self.phase_subdir: %s', self.phase_subdir)
-            # if len(self.phase_subdir) > 1:
-            if True:
-                self.phase_subdir = self.phase_subdir[0]
+            p_subdirs = glob.glob(self.phase + '_*', root_dir=self.config_dir)
+            if len(p_subdirs) > 1:
+                # this case is not wanted
+                self.phase_subdir = p_subdirs[0]
+            else:
+                self.phase_subdir = p_subdirs[0]
             logger.debug('Overlay cfg with yml files in %s', self.phase_subdir)
 
     # if there is a phase subdir, load cfg preferred from there
