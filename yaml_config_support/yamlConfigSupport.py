@@ -1,16 +1,20 @@
-
 import os
 import glob
 import re
 import yaml
 from flowpy.utils import setup_logger
 from pathlib import Path, PosixPath
+import collections
 
 logger = setup_logger(__name__, __name__+'.log')
 
 def posixpath_representer(dumper, data):
     return dumper.represent_scalar('tag:yaml.org,2002:str', str(data))
 yaml.add_representer(PosixPath, posixpath_representer)
+
+def represent_ordereddict(dumper, data):
+    return dumper.represent_dict(data.items())
+yaml.add_representer(collections.OrderedDict, represent_ordereddict)
 
 # XXX add pydantic support, maybe use yaml_validate.py script
 class YamlConfigSupport:
@@ -35,6 +39,7 @@ class YamlConfigSupport:
         logger.debug('self.config_d.keys(): %s', self.config_d.keys())
         # return list(self.config_d.keys())
         return sorted(self.config_d.keys())
+
 
     def config_show(self, cfg_name):
         """ show config dict for given name, for click command line """
@@ -90,7 +95,7 @@ class YamlConfigSupport:
             self.cfg_master[cfg] = self.load_config_master(cfg+'.yml')
             self.cfg_age = self.cfg_master['vals_a-g-e']
         #self.cfg_meta = self.load_config('kp_meta.yml')
-        # DATA DIR configs
+        # DATA DIR configs XXX intransparent , set in application code
         self.cfg_si['data_in'] = Path(self.data_path).joinpath('data_in')
         self.cfg_si['data_in_sub'] = self.cfg_si['data_in'].joinpath(self.sub)
         #self.cfg_si['data_in'] = Path(self.cfg_si['data_path']).joinpath('data_in', self.sub)
@@ -246,4 +251,21 @@ class YamlConfigSupport:
                 # logger.debug(yaml_str)
                 logger.debug("--------------------------------------")
 
+    # a method to fill in values in a yaml config dict,
+    # we pass the template dict and a values dict
+    # the result should be in same order as original template
+    # The values dict contains only the keys and values to be replaced
+    # this needs to be done recursively for all nested dict levels
+    def fill_config_template(self, template_d, values_d):
+        from collections import OrderedDict
+        filled_d = OrderedDict()
+        for key, value in template_d.items():
+            if isinstance(value, dict):
+                # recursive call for nested dict
+                sub_values_d = values_d.get(key, {})
+                filled_d[key] = self.fill_config_template(value, sub_values_d)
+            else:
+                # replace value if key exists in values_d
+                filled_d[key] = values_d.get(key, value)
+        return filled_d
 
