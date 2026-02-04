@@ -7,7 +7,8 @@ from collections import OrderedDict
 
 home = os.environ['HOME']
 ### XXX SET here the subpath to your local checked out git repo
-subpath_string = 'dev'
+#subpath_string = 'dev'
+subpath_string = 'dev_ldbv'
 
 basedir = '%s/%s/eip-konfigurationen/codefy/helmchart' %(home, subpath_string)
 print("Your basedir ist : ", basedir)
@@ -68,7 +69,15 @@ class YamlConfigSupport(OutputControl):
                 value = value[key]
             # value ist jetzt die Liste
             # first check if we have a list of strings (contr. to a list of dicts)
-
+            if len(l_item) > 0 and type(l_item[0]) != dict:
+                # then we just replace the list
+                nested_dict_temp = nested_dict
+                for key in keys[:-1]:
+                    nested_dict_temp = nested_dict_temp[key]
+                last_key = keys[-1]
+                nested_dict_temp[last_key] = l_item
+                self.out('REPLACING LIST for %s with %s items' %(last_key, str(len(l_item))))
+                return
             for new_dict in l_item:
                 # einzelitems in diesere liste
                 #if type(new_dict) == str:
@@ -160,14 +169,15 @@ class ConfigFillTest(YamlConfigSupport):
 
 
 if __name__ == "__main__":
+    default_template_dir = basedir
+    default_valuestore_dir = home+'/codefy_creds'
+
     parser = argparse.ArgumentParser(description="Test Config Fill")
     parser.add_argument("env", help="Environment to use (prod, test, dev)")
     
-    default_template_dir = basedir
-    parser.add_argument('--template_dir', type=str, default=default_template_dir, 
+    parser.add_argument('--template_dir', type=str, default=default_template_dir,
                         help='Path to the template main dir (git) ')
 
-    default_valuestore_dir = home+'/codefy_creds'
     parser.add_argument('--valuestore_dir', type=str, default=default_valuestore_dir,
                         help='Path to the dir which hold the valuesstores yaml')
 
@@ -175,11 +185,11 @@ if __name__ == "__main__":
     parser.add_argument("-v", "--verbose", action='store_true', help="Verbose output: Show each substitution", default=False)
 
     args = parser.parse_args()
-    outpath = '%s/cf/cf-%s' %(home, args.env)
-    if not os.path.exists(outpath):
-        os.mkdir(outpath)
+    outpath = '%s/cf/cf-%s' %(home+'/'+subpath_string, args.env)
     if args.outdir:
         outpath = args.outdir
+    if not os.path.exists(outpath):
+        os.mkdir(outpath)
 
     out_fp = '%s/updated_values-%s.yaml' %(outpath, args.env)
     if os.path.exists(out_fp):
