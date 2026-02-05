@@ -2,27 +2,36 @@
 import argparse
 import os
 import shutil
-from yamlTemplateFillSupport import YamlTemplateFillSupport
-from yaml_config_support.K8sValuesFill import K8sValuesFill
+from .yamlTemplateFillSupport import YamlTemplateFillSupport
+#from yaml_config_support.K8sValuesFill import K8sValuesFill
+from .k8sValuesFill import K8sValuesFill
 
-# Globale Variablen und Umgebungsvariablen
-home = os.environ['HOME']
+# Globale Variablen und Umgebungsvariablen - default Werte
 subpath_string = 'dev'
+home = os.environ['HOME']
 basedir = f'{home}/{subpath_string}/eip-konfigurationen/codefy/helmchart'
-default_template_dir = basedir
-default_valuestore_dir = f'{home}/codefy_creds'
+outpath = f'{home}/{subpath_string}/cf'
+options = {
+    'default_template_dir': f'{basedir}/codefy_values',
+    'default_valuestore_dir': f'{home}/codefy_creds',
+    'outpath': outpath,
+}
 
-def main():
+def main(**options):
     parser = argparse.ArgumentParser(description="Test Config Fill")
     parser.add_argument("env", help="Environment to use (prod, test, dev)")
-    parser.add_argument('--template_dir', type=str, default=default_template_dir,
+    parser.add_argument('--template_dir', type=str, default=options['default_template_dir'],
                         help='Path to the template main dir (git) ')
-    parser.add_argument('--valuestore_dir', type=str, default=default_valuestore_dir,
+    parser.add_argument('--valuestore_dir', type=str, default=options['default_valuestore_dir'],
                         help='Path to the dir which hold the valuesstores yaml')
+    parser.add_argument('--ypath_keys', nargs='*', default=['resources'], help='List of keys for yamlpath files')
+    parser.add_argument('--ydict_keys', nargs='*', default=['creds', 'user'], help='List of keys for yamldict files')
     parser.add_argument("-o", "--outdir", help="Directory for output")
     parser.add_argument("-v", "--verbose", action='store_true', help="Verbose output: Show each substitution", default=False)
     args = parser.parse_args()
-    outpath = f'{home}/{subpath_string}/cf/cf-{args.env}'
+
+    print(options)
+    outpath = options['outpath']
     if args.outdir:
         outpath = args.outdir
     if not os.path.exists(outpath):
@@ -34,9 +43,11 @@ def main():
         shutil.copy(out_fp, out_fp+'_bak.yaml')
     template_dir = args.template_dir
     creds_dir = args.valuestore_dir
-    CF = K8sValuesFill(template_dir, creds_dir, env=args.env, verbose=args.verbose)
+    CF = K8sValuesFill(args.env, template_dir, creds_dir, ypath_keys=args.ypath_keys, ydict_keys=args.ydict_keys,
+                       verbose=args.verbose)
     CF.load_files()
-    CF.test_config_fill(out_fp)
+    CF.fill_configs()
+    CF.write_output(out_fp)
 
 if __name__ == "__main__":
-    main()
+    main(**options)

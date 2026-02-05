@@ -1,6 +1,7 @@
 import yaml
 from collections import OrderedDict
-from yaml_config_support.output_control import OutputControl
+#from yaml_config_support.output_control import OutputControl
+from .output_control import OutputControl
 
 def represent_ordereddict(dumper, data):
     return dumper.represent_dict(data.items())
