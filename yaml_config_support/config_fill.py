@@ -1,14 +1,17 @@
+#!/usr/bin/python3
+
 import yaml
 import argparse
 import os
 import shutil
 from collections import OrderedDict
+from pprint import pprint
 
 
 home = os.environ['HOME']
 ### XXX SET here the subpath to your local checked out git repo
-#subpath_string = 'dev'
-subpath_string = 'dev_ldbv'
+subpath_string = 'dev'
+#subpath_string = 'dev_ldbv'
 
 basedir = '%s/%s/eip-konfigurationen/codefy/helmchart' %(home, subpath_string)
 print("Your basedir ist : ", basedir)
@@ -30,6 +33,7 @@ class OutputControl:
 
 
 class YamlConfigSupport(OutputControl):
+
     def fill_config_template(self, template_d, values_d):
         filled_d = OrderedDict()
         for key, value in template_d.items():
@@ -65,24 +69,40 @@ class YamlConfigSupport(OutputControl):
 
         def set_list2(nested_dict, keys, l_item):
             value = nested_dict
-            for key in keys:
+            #print(value.keys())
+            #print(keys)
+            for key in keys[:-1]:
                 value = value[key]
             # value ist jetzt die Liste
+
+            #pprint(result3)
             # first check if we have a list of strings (contr. to a list of dicts)
             if len(l_item) > 0 and type(l_item[0]) != dict:
                 # then we just replace the list
                 nested_dict_temp = nested_dict
+                print(nested_dict_temp.keys())
+                print(keys)
                 for key in keys[:-1]:
+                    print(key)
                     nested_dict_temp = nested_dict_temp[key]
+                print(nested_dict_temp)
                 last_key = keys[-1]
+                print(last_key)
+                # Replace each list item seperately
+                #for nl in nested_dict_temp:
+                #    nl[last_key] = l_item
+                #    self.out('REPLACING LIST-ITEM for %s with %s items' %(last_key, l_item))
+                # Replace whole list
                 nested_dict_temp[last_key] = l_item
-                self.out('REPLACING LIST for %s with %s items' %(last_key, str(len(l_item))))
+
+                self.out('REPLACED %s items' %(str(len(l_item))))
                 return
+
+            # If we need to handle subdicts, let walk through them
+            # first one step deeper
+            value = value[keys[len(keys)-1]]
+            #print(value)
             for new_dict in l_item:
-                # einzelitems in diesere liste
-                #if type(new_dict) == str:
-                    #value.append()
-                #self.out(str(new_dict))
                 # Das erste Key-Value-Paar dient als Kriterium
                 match_key = list(new_dict.keys())[0]
                 match_value = new_dict[match_key]
@@ -94,19 +114,20 @@ class YamlConfigSupport(OutputControl):
                             updated[k] = v
                             self.out("UPDATED: %s set to %s" %(k, v))
                         value[idx] = updated
+            return
 
-        #print("SUB list")  
+        # START of method
         if 'lists' in values_d.keys():
             for l_key, l_item in values_d['lists'].items():
-                #print(l_key, l_item)
+                print(l_key, l_item)
                 keys = l_key.split('.')
-                #set_list_nested_value(template_d, keys, values_d)
+
                 set_list2(template_d, keys, l_item)
 
+            pprint(template_d)
             values_d.pop('lists')
 
 
-        #print("SUB dicts")
         for key, value in values_d.items():
 
             keys = key.split('.')
@@ -125,7 +146,7 @@ class ConfigFillTest(YamlConfigSupport):
         self.env = env
         
     def load_files(self):
-        fn = '%s/values_%s.yaml' %(self.template_dir, self.env)
+        fn = '%s/values_%s.yaml' %(self.template_dir, 'onefitsall') #self.env)
         self.out("TEMPLATE file: ", fn)
         with open(fn, 'r') as f:
             self.template = yaml.safe_load(f)
@@ -152,16 +173,14 @@ class ConfigFillTest(YamlConfigSupport):
     def test_config_fill(self, out_fp):
         # substitution in yaml dict
         result  = self.fill_config_template(self.template, self.creds)
-
         result2 = self.fill_config_template(result, self.user)
 
         result3 = self.fill_simple_template(result2, self.resources)
 
-        with open(out_fp+'_2.yaml', 'w') as f:
-            yaml.dump(result2, f)
-
+        #with open(out_fp+'_2.yaml', 'w') as f:
+        #    yaml.dump(result2, f)
         with open(out_fp, 'w') as f:
-            yaml.dump(result3, f)
+            yaml.dump(result3, f, default_flow_style=False)
 
         print("Completed config_values file written to ", out_fp)
 
