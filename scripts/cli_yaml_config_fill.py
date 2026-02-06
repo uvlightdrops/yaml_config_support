@@ -16,6 +16,25 @@ print(sys.path)
 #from yaml_config_support.baseValuesFill import BaseValuesFill
 from yaml_config_support.cli_config_fill import main
 
+data_files = {
+	'creds': {
+		'source': 'private',
+		'transform': 'fill_config_template',
+		'env': 'yes',
+	},
+	'resources': {
+		'source': 'project',
+		'transform': 'fill_simple_template',
+		'env': 'together',
+	},
+	'user': {
+		'source': 'private',
+		'transform': 'fill_config_template',
+		'env': 'no',
+	},
+}
+
+
 project_files = ['resources']
 private_files = ['creds', 'user']
 
@@ -32,6 +51,7 @@ options = {
     'default_template_dir': template_dir,
     'default_valuestore_dir': valuestore_dir,
     'outpath': outpath,
+	'data_files': data_files,
 }
 
 

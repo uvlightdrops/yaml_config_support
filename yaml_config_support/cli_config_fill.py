@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 import argparse
-import os
-import shutil
 from .yamlTemplateFillSupport import YamlTemplateFillSupport
 #from yaml_config_support.K8sValuesFill import K8sValuesFill
 from .k8sValuesFill import K8sValuesFill
 
 # Globale Variablen und Umgebungsvariablen - default Werte
+"""
 subpath_string = 'dev'
+import os
 home = os.environ['HOME']
 basedir = f'{home}/{subpath_string}/eip-konfigurationen/codefy/helmchart'
 outpath = f'{home}/{subpath_string}/cf'
@@ -16,8 +16,9 @@ options = {
     'default_valuestore_dir': f'{home}/codefy_creds',
     'outpath': outpath,
 }
+"""
 
-def main(**options):
+def main(options):
     parser = argparse.ArgumentParser(description="Test Config Fill")
     parser.add_argument("env", help="Environment to use (prod, test, dev)")
     parser.add_argument('--template_dir', type=str, default=options['default_template_dir'],
@@ -30,24 +31,18 @@ def main(**options):
     parser.add_argument("-v", "--verbose", action='store_true', help="Verbose output: Show each substitution", default=False)
     args = parser.parse_args()
 
-    print(options)
-    outpath = options['outpath']
+    #print(options)
+    out_dir = options['outpath']
     if args.outdir:
-        outpath = args.outdir
-    if not os.path.exists(outpath):
-        os.makedirs(outpath)
-    out_fp = f'{outpath}/updated_values-{args.env}.yaml'
-    if os.path.exists(out_fp):
-        if args.verbose:
-            print(f'Target output file existed: {out_fp}, making backup')
-        shutil.copy(out_fp, out_fp+'_bak.yaml')
+        out_dir = args.outdir
     template_dir = args.template_dir
     creds_dir = args.valuestore_dir
-    CF = K8sValuesFill(args.env, template_dir, creds_dir, ypath_keys=args.ypath_keys, ydict_keys=args.ydict_keys,
-                       verbose=args.verbose)
+
+    CF = K8sValuesFill(args.env, template_dir, creds_dir, options)
+    #CF.options = options
     CF.load_files()
     CF.fill_configs()
-    CF.write_output(out_fp)
+    CF.write_output(out_dir, args.env)
 
-if __name__ == "__main__":
-    main(**options)
+#if __name__ == "__main__":
+#    main(options)

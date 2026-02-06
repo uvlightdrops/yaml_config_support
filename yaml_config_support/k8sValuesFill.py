@@ -1,19 +1,26 @@
 from yaml_config_support.yamlTemplateFillSupport import YamlTemplateFillSupport
 #from .yamlTemplateFillSupport import YamlTemplateFillSupport
 import yaml
+import os
+import shutil
 
 
 class K8sValuesFill(YamlTemplateFillSupport):
 
-    def __init__(self, env, template_dir, creds_dir, ypath_keys=[], ydict_keys=[], verbose=False):
-        super().__init__(verbose=verbose)
+    def __init__(self, env, template_dir, creds_dir, options):
         self.template_dir = template_dir
         self.creds_dir = creds_dir
         self.env = env
-        self.ypath_keys = ypath_keys
-        self.ydict_keys = ydict_keys
         self.data = {}
-        self.example()
+        #self.example()
+        self.verbose = False
+        if 'verbose' in options:
+            self.verbose = options['verbose']
+        for key, value in options.items():
+            self.out("option %s set to %s" %(key, value))
+            setattr(self, key, value)
+        #self.verbose = verbose
+        #self.data_files = self.options['data_files']
 
     # method for file loading
     # we need a mapping
@@ -29,12 +36,12 @@ class K8sValuesFill(YamlTemplateFillSupport):
             if info['source'] == 'private':
                 fn = '%s/values_%s%s.yaml' % (self.creds_dir, key, env)
                 self.out("PRIVATE file: ", fn)
-                with open(fn, 'r') as f:
-                    self.data[key] = yaml.safe_load(f)
+                with open(fn, 'r') as file:
+                    self.data[key] = yaml.safe_load(file)
             elif info['source'] == 'project':
                 fn = '%s/values_%s%s.yaml' % (self.template_dir, key, env)
                 self.out("PROJECT file: ", fn)
-                with (open(fn, 'r') as file):
+                with open(fn, 'r') as file:
                     tmp = yaml.safe_load(file)
                     if info['env'] == 'together':
                         self.data[key] = tmp[self.env]
@@ -81,7 +88,19 @@ class K8sValuesFill(YamlTemplateFillSupport):
 
         self.result = self.template
 
-    def write_output(self, out_fp):
+    def write_output(self, out_dir, env):
+
+        out_sub = f'{out_dir}/cf-{env}'
+        if not os.path.exists(out_sub):
+            os.makedirs(out_sub)
+
+        out_fp = f'{out_sub}/updated_values-{env}.yaml'
+        if os.path.exists(out_fp):
+            if self.verbose:
+                print(f'Target output file existed: {out_fp}, making backup')
+            shutil.copy(out_fp, out_fp+'_bak.yaml')
+
+
         with open(out_fp, 'w') as f:
             yaml.dump(self.result, f, default_flow_style=False)
         print("Completed config_values file written to ", out_fp)
