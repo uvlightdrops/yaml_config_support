@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""Projektbezogener Wrapper für :mod:`yaml_config_support.cli_config_fill`.
+
+Das Skript definiert die ``data_files``-Konfiguration und Standardpfade für ein
+konkretes Projektsetup und reicht diese gesammelt an ``main(options)`` weiter.
+"""
 
 import sys
 import os
@@ -38,16 +43,16 @@ data_files = {
 project_files = ['resources']
 private_files = ['creds', 'user']
 
-subpath_string = 'dev'
-subpath_string = 'dev_ldbv'
+# Beispielwert, an das Zielprojekt anpassen.
+project_subpath = 'dev_ldbv'
 #basedir = f'{home}/{subpath_string}/eip-konfigurationen/codefy/helmchart'
-basedir = f'{home}/{subpath_string}'
+basedir = f'{home}/{project_subpath}'
 template_dir    = f'{basedir}/codefy_data/helmchart'
 valuestore_dir  = f'{basedir}/codefy_creds' 
 outpath = f'{basedir}/cf'
 
 options = {
-    'subpath_string' : subpath_string,
+	'subpath_string' : project_subpath,
     'default_template_dir': template_dir,
     'default_valuestore_dir': valuestore_dir,
     'outpath': outpath,
@@ -56,5 +61,5 @@ options = {
 
 
 if __name__ == "__main__":
-    main(**options)
+	main(options)
 

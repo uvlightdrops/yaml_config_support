@@ -1,3 +1,5 @@
+"""Lädt Wertedateien und kombiniert sie zu einer finalen Kubernetes-Values-Datei."""
+
 from yaml_config_support.yamlTemplateFillSupport import YamlTemplateFillSupport
 #from .yamlTemplateFillSupport import YamlTemplateFillSupport
 import yaml
@@ -6,16 +8,29 @@ import shutil
 
 
 class K8sValuesFill(YamlTemplateFillSupport):
+    """Orchestriert das Laden, Überlagern und Schreiben von Values-Dateien.
+
+    Die Klasse erwartet ein Basistemplate namens ``values_onefitsall.yaml`` im
+    Template-Verzeichnis. Weitere Dateien werden über ``data_files`` beschrieben.
+    Deren Reihenfolge bestimmt auch die Reihenfolge der Overlays.
+    """
 
     def __init__(self, env, template_dir, creds_dir, options):
+        """Initialisiert den Füllprozess für eine Zielumgebung.
+
+        Args:
+            env: Zielumgebung wie ``dev`` oder ``prod``.
+            template_dir: Verzeichnis mit Template- und Projektdateien.
+            creds_dir: Verzeichnis mit privaten Wertedateien.
+            options: Konfigurationsdictionary; relevante Schlüssel sind unter
+                anderem ``verbose`` und ``data_files``.
+        """
+        super().__init__(verbose=options.get('verbose', False))
         self.template_dir = template_dir
         self.creds_dir = creds_dir
         self.env = env
         self.data = {}
         #self.example()
-        self.verbose = False
-        if 'verbose' in options:
-            self.verbose = options['verbose']
         for key, value in options.items():
             self.out("option %s set to %s" %(key, value))
             setattr(self, key, value)
@@ -28,6 +43,16 @@ class K8sValuesFill(YamlTemplateFillSupport):
     # the content shall be applied to the template as an overlay nested dict
 
     def load_files_spec(self):
+        """Lädt alle in ``data_files`` beschriebenen Overlay-Dateien.
+
+        Dateinamenskonventionen:
+
+        * ``values_<key>_<env>.yaml`` bei ``env == 'yes'``
+        * ``values_<key>.yaml`` bei ``env == 'no'`` oder ``'together'``
+
+        Für Projektdateien mit ``env == 'together'`` wird aus der geladenen
+        Datei nur der Abschnitt der aktuellen Umgebung übernommen.
+        """
         for key, info in self.data_files.items():
             if info['env'] == 'yes':
                 env = '_%s' % self.env
@@ -49,6 +74,7 @@ class K8sValuesFill(YamlTemplateFillSupport):
                         self.data[key] = tmp
 
     def load_files(self):
+        """Lädt das Basistemplate und anschließend alle Overlay-Dateien."""
         # load the template file
         fn = '%s/values_%s.yaml' % (self.template_dir, 'onefitsall')
         with open(fn, 'r') as f:
@@ -58,6 +84,11 @@ class K8sValuesFill(YamlTemplateFillSupport):
         self.load_files_spec()
 
     def example(self):
+        """Setzt ein Beispiel für ``data_files`` direkt auf der Instanz.
+
+        Die Methode dient als Referenz für die erwartete Struktur von
+        ``data_files`` und wird aktuell nicht automatisch aufgerufen.
+        """
         self.data_files = {
             'creds': {
                 'source': 'private',
@@ -77,6 +108,7 @@ class K8sValuesFill(YamlTemplateFillSupport):
         }
 
     def fill_configs(self):
+        """Wendet alle konfigurierten Overlays in definierter Reihenfolge an."""
         for key, info in self.data_files.items():
             if info['transform'] == 'fill_config_template':
                 temp = self.fill_config_template(self.template, self.data[key])
@@ -89,6 +121,16 @@ class K8sValuesFill(YamlTemplateFillSupport):
         self.result = self.template
 
     def write_output(self, out_dir, env):
+        """Schreibt die berechnete Values-Datei in das Ausgabeziel.
+
+        Die Ausgabe erfolgt nach ``<out_dir>/cf-<env>/updated_values-<env>.yaml``.
+        Existiert die Datei bereits, wird vor dem Überschreiben eine Sicherung
+        ``*_bak.yaml`` angelegt.
+
+        Args:
+            out_dir: Basisverzeichnis für die Ausgabe.
+            env: Name der Zielumgebung; wird in Pfad und Dateiname verwendet.
+        """
 
         out_sub = f'{out_dir}/cf-{env}'
         if not os.path.exists(out_sub):

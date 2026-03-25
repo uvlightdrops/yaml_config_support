@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+"""CLI-Einstiegspunkt zum Erzeugen finaler YAML-Values aus Templates."""
+
 import argparse
-from .yamlTemplateFillSupport import YamlTemplateFillSupport
 #from yaml_config_support.K8sValuesFill import K8sValuesFill
 from .k8sValuesFill import K8sValuesFill
 
@@ -19,6 +20,22 @@ options = {
 """
 
 def main(options):
+    """Startet die CLI mit einem projektbezogenen Options-Dictionary.
+
+    Das übergebene ``options``-Dictionary liefert Standardpfade und die
+    ``data_files``-Beschreibung. Die eigentlichen Laufzeitparameter werden
+    anschließend per Kommandozeile geparst.
+
+    Erwartete Schlüssel in ``options``:
+
+    * ``default_template_dir``
+    * ``default_valuestore_dir``
+    * ``outpath``
+    * ``data_files``
+
+    Args:
+        options: Projektkonfiguration für Standardpfade und Dateidefinitionen.
+    """
     parser = argparse.ArgumentParser(description="Test Config Fill")
     parser.add_argument("env", help="Environment to use (prod, test, dev)")
     parser.add_argument('--template_dir', type=str, default=options['default_template_dir'],
