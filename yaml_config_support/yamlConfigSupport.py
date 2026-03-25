@@ -1,10 +1,29 @@
 
+"""Legacy-Helfer zum Laden mehrschichtiger YAML-Konfigurationsbäume.
+
+Dieses Modul ist funktional von der Template-Fill-Logik getrennt und verwendet
+projektspezifische Konventionen wie ``kp_*.yml`` und Phasen-Unterverzeichnisse.
+"""
+
 import os
 import glob
+import logging
 import re
 import yaml
-from flowpy.utils import setup_logger
 from pathlib import Path, PosixPath
+
+try:
+    from flowpy.utils import setup_logger
+except ModuleNotFoundError:
+    def setup_logger(name, _logfile=None):
+        """Fallback auf Standard-Logging, wenn `flowpy` nicht installiert ist."""
+        logger = logging.getLogger(name)
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter('%(levelname)s:%(name)s:%(message)s'))
+            logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+        return logger
 
 logger = setup_logger(__name__, __name__+'.log')
 
@@ -14,9 +33,11 @@ yaml.add_representer(PosixPath, posixpath_representer)
 
 # XXX add pydantic support, maybe use yaml_validate.py script
 class YamlConfigSupport:
-    """ supports loading yaml config files, and setting them as class members
-        loading complete deirectories of yaml files,
-        and laoding several cfg layers, for example for inheritance"""
+    """Lädt YAML-Konfigurationen und macht sie als Objektattribute verfügbar.
+
+    Das Modul ist historisch gewachsen und deckt zusätzlich Phasen-Overlays,
+    lokale Overrides und ein Master-Konfigurationsverzeichnis ab.
+    """
     # XXX rm ?
     # defaults
     # config_dir = Path(__file__).parent
@@ -104,8 +125,8 @@ class YamlConfigSupport:
         subdirs = glob.glob('p*', root_dir=self.config_dir)
         for subdir in subdirs:
             logger.debug('subdir: %s', subdir)
-            # if re.match('p\d+', subdir):
-            if re.match('p\d+(_.*)?', subdir):
+            # if re.match(r'p\d+', subdir):
+            if re.match(r'p\d+(_.*)?', subdir):
                 print(subdir)
             else:
                 logger.debug('skipped phase subdir: %s', subdir)
@@ -113,7 +134,7 @@ class YamlConfigSupport:
     def set_phase_subdir(self):
         logger.debug('phase: %s  || phase_subdir: %s', self.phase, self.phase_subdir)
         # if len(self.phase.split('_')) == 1:
-        if re.match('p\d+', self.phase):
+        if re.match(r'p\d+', self.phase):
             # the condition means, if just ie p3 is given and not p3_mysepcialphase
             p_subdirs = glob.glob(self.phase + '_*', root_dir=self.config_dir)
             if len(p_subdirs) > 1:
@@ -179,8 +200,10 @@ class YamlConfigSupport:
                 if key not in self.cfg_profile:
                     self.cfg_profile[key] = cfg_default[key]
 
-    def set_configs_as_members(self, cfg_names_list=[]):
+    def set_configs_as_members(self, cfg_names_list=None):
         """ set all given names as class members and load all dicts from yaml files """
+        if cfg_names_list is None:
+            cfg_names_list = []
         self.cfg_names_list = cfg_names_list
         for name in cfg_names_list:
             fn = name + '.yml'

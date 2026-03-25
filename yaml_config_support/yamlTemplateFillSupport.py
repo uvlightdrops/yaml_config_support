@@ -1,9 +1,11 @@
 """Hilfsfunktionen zum Füllen von YAML-Templates mit Wertedateien."""
 
-import yaml
 from collections import OrderedDict
-#from yaml_config_support.output_control import OutputControl
+
+import yaml
+
 from .output_control import OutputControl
+
 
 def represent_ordereddict(dumper, data):
     """Serialisiert ``OrderedDict``-Instanzen mit stabiler Schlüsselreihenfolge.
@@ -51,12 +53,47 @@ class YamlTemplateFillSupport(OutputControl):
                 sub_values_d = values_d.get(key, {})
                 filled_d[key] = self.fill_config_template(value, sub_values_d)
             else:
-                if key in values_d.keys():
+                if key in values_d:
                     filled_d[key] = values_d[key]
                     self.out('INSERTING a value for %s' % key)
                 else:
                     filled_d[key] = value
         return filled_d
+
+    def _set_nested_value(self, nested_dict, keys, new_value):
+        """Setzt einen Wert in einem verschachtelten Dictionary per Schlüsselpfad."""
+        value = nested_dict
+        for key in keys[:-1]:
+            value = value[key]
+        value[keys[-1]] = new_value
+
+    def _set_list_value(self, nested_dict, keys, list_items):
+        """Aktualisiert eine Listenstruktur im Template anhand eines Pfads.
+
+        Primitive Listen werden vollständig ersetzt. Bei Listen aus Dictionaries
+        werden Einträge über den ersten Schlüssel des neuen Dicts gematcht und
+        anschließend feldweise überschrieben.
+        """
+        value = nested_dict
+        for key in keys[:-1]:
+            value = value[key]
+
+        if list_items and not isinstance(list_items[0], dict):
+            value[keys[-1]] = list_items
+            self.out('REPLACED %s items' % str(len(list_items)))
+            return
+
+        current_items = value[keys[-1]]
+        for new_dict in list_items:
+            match_key = list(new_dict.keys())[0]
+            match_value = new_dict[match_key]
+            for idx, old_dict in enumerate(current_items):
+                if old_dict.get(match_key) == match_value:
+                    updated = OrderedDict(old_dict)
+                    for key, value in new_dict.items():
+                        updated[key] = value
+                        self.out("UPDATED: %s set to %s" % (key, value))
+                    current_items[idx] = updated
 
     def fill_simple_template(self, template_d, values_d):
         """Füllt ein Template über Punktpfade und optionale Listen-Updates.
@@ -75,51 +112,15 @@ class YamlTemplateFillSupport(OutputControl):
         Returns:
             Das direkt veränderte Template-Dictionary.
         """
-        def set_nested_value(nested_dict, keys, new_value):
-            """Setzt einen Wert in einem verschachtelten Dictionary per Pfad."""
-            value = nested_dict
-            for key in keys[:-1]:
-                value = value[key]
-            last_key = keys[-1]
-            value[last_key] = new_value
+        working_values = dict(values_d)
+        list_values = working_values.pop('lists', {})
 
-        def set_list2(nested_dict, keys, l_item):
-            """Aktualisiert eine Listenstruktur im Template anhand eines Pfads.
+        for l_key, l_item in list_values.items():
+            keys = l_key.split('.')
+            self._set_list_value(template_d, keys, l_item)
 
-            Primitive Listen werden vollständig ersetzt. Bei Listen aus
-            Dictionaries werden Einträge über den ersten Schlüssel des neuen
-            Dicts gematcht und dann feldweise überschrieben.
-            """
-            value = nested_dict
-            for key in keys[:-1]:
-                value = value[key]
-            if len(l_item) > 0 and type(l_item[0]) != dict:
-                nested_dict_temp = nested_dict
-                for key in keys[:-1]:
-                    nested_dict_temp = nested_dict_temp[key]
-                last_key = keys[-1]
-                nested_dict_temp[last_key] = l_item
-                self.out('REPLACED %s items' % (str(len(l_item))))
-                return
-            value = value[keys[len(keys)-1]]
-            for new_dict in l_item:
-                match_key = list(new_dict.keys())[0]
-                match_value = new_dict[match_key]
-                for idx, old_dict in enumerate(value):
-                    if old_dict.get(match_key) == match_value:
-                        updated = OrderedDict(old_dict)
-                        for k, v in new_dict.items():
-                            updated[k] = v
-                            self.out("UPDATED: %s set to %s" % (k, v))
-                        value[idx] = updated
-            return
-        if 'lists' in values_d.keys():
-            for l_key, l_item in values_d['lists'].items():
-                keys = l_key.split('.')
-                set_list2(template_d, keys, l_item)
-            values_d.pop('lists')
-        for key, value in values_d.items():
+        for key, value in working_values.items():
             keys = key.split('.')
             self.out('INSERTING %s %s for %s' % (value, ' '*(6-len(str(value))), key))
-            set_nested_value(template_d, keys, value)
+            self._set_nested_value(template_d, keys, value)
         return template_d

@@ -1,10 +1,16 @@
 """Lädt Wertedateien und kombiniert sie zu einer finalen Kubernetes-Values-Datei."""
 
-from yaml_config_support.yamlTemplateFillSupport import YamlTemplateFillSupport
-#from .yamlTemplateFillSupport import YamlTemplateFillSupport
-import yaml
-import os
+from __future__ import annotations
+
+from collections import OrderedDict
+from pathlib import Path
 import shutil
+
+import yaml
+
+from .config_models import FillOptions
+from .exceptions import MissingEnvironmentError, YamlFileAccessError
+from .yamlTemplateFillSupport import YamlTemplateFillSupport
 
 
 class K8sValuesFill(YamlTemplateFillSupport):
@@ -15,6 +21,8 @@ class K8sValuesFill(YamlTemplateFillSupport):
     Deren Reihenfolge bestimmt auch die Reihenfolge der Overlays.
     """
 
+    template_file_name = "values_onefitsall.yaml"
+
     def __init__(self, env, template_dir, creds_dir, options):
         """Initialisiert den Füllprozess für eine Zielumgebung.
 
@@ -22,103 +30,96 @@ class K8sValuesFill(YamlTemplateFillSupport):
             env: Zielumgebung wie ``dev`` oder ``prod``.
             template_dir: Verzeichnis mit Template- und Projektdateien.
             creds_dir: Verzeichnis mit privaten Wertedateien.
-            options: Konfigurationsdictionary; relevante Schlüssel sind unter
-                anderem ``verbose`` und ``data_files``.
+            options: Konfigurationsdictionary oder :class:`FillOptions`.
         """
-        super().__init__(verbose=options.get('verbose', False))
-        self.template_dir = template_dir
-        self.creds_dir = creds_dir
+        self.options = options if isinstance(options, FillOptions) else FillOptions.from_mapping(options)
+        super().__init__(verbose=self.options.verbose)
+        self.template_dir = Path(template_dir)
+        self.creds_dir = Path(creds_dir)
         self.env = env
-        self.data = {}
-        #self.example()
-        for key, value in options.items():
-            self.out("option %s set to %s" %(key, value))
-            setattr(self, key, value)
-        #self.verbose = verbose
-        #self.data_files = self.options['data_files']
+        self.data_files = self.options.data_files
+        self.data = OrderedDict()
+        self.template = {}
+        self.result = {}
 
-    # method for file loading
-    # we need a mapping
-    # values_user for example is loaded from creds_dir/values_user.yaml
-    # the content shall be applied to the template as an overlay nested dict
+    def _read_yaml_file(self, file_path):
+        """Liest eine YAML-Datei und liefert den geparsten Inhalt zurück.
+
+        Args:
+            file_path: Pfad zur Datei.
+
+        Returns:
+            Das aus YAML geladene Python-Objekt.
+
+        Raises:
+            YamlFileAccessError: Wenn die Datei nicht gelesen werden kann.
+        """
+        file_path = Path(file_path)
+        self.out("READING", str(file_path))
+        try:
+            with file_path.open("r", encoding="utf-8") as file_handle:
+                return yaml.safe_load(file_handle)
+        except FileNotFoundError as exc:
+            raise YamlFileAccessError(f"YAML-Datei nicht gefunden: {file_path}") from exc
+
+    def _resolve_source_dir(self, spec):
+        """Bestimmt das Stammverzeichnis für eine Dateispezifikation."""
+        if spec.source == "private":
+            return self.creds_dir
+        return self.template_dir
+
+    def _load_data_file(self, spec):
+        """Lädt eine einzelne Overlay-Datei gemäß ihrer Spezifikation.
+
+        Bei ``env == 'together'`` wird nur der Abschnitt der aktuellen Umgebung
+        zurückgegeben.
+        """
+        file_path = self._resolve_source_dir(spec) / spec.file_name(self.env)
+        payload = self._read_yaml_file(file_path)
+        if spec.env != "together":
+            return payload
+        if self.env not in payload:
+            raise MissingEnvironmentError(
+                f"Umgebung {self.env!r} fehlt in Datei {file_path}"
+            )
+        return payload[self.env]
+
+    def _apply_transform(self, template, spec, overlay):
+        """Wendet die konfigurierte Transformationsstrategie auf ein Overlay an."""
+        if spec.transform == "fill_config_template":
+            return self.fill_config_template(template, overlay)
+        if spec.transform == "fill_simple_template":
+            return self.fill_simple_template(template, overlay)
+        return template
 
     def load_files_spec(self):
-        """Lädt alle in ``data_files`` beschriebenen Overlay-Dateien.
-
-        Dateinamenskonventionen:
-
-        * ``values_<key>_<env>.yaml`` bei ``env == 'yes'``
-        * ``values_<key>.yaml`` bei ``env == 'no'`` oder ``'together'``
-
-        Für Projektdateien mit ``env == 'together'`` wird aus der geladenen
-        Datei nur der Abschnitt der aktuellen Umgebung übernommen.
-        """
-        for key, info in self.data_files.items():
-            if info['env'] == 'yes':
-                env = '_%s' % self.env
-            else:
-                env = ''
-            if info['source'] == 'private':
-                fn = '%s/values_%s%s.yaml' % (self.creds_dir, key, env)
-                self.out("PRIVATE file: ", fn)
-                with open(fn, 'r') as file:
-                    self.data[key] = yaml.safe_load(file)
-            elif info['source'] == 'project':
-                fn = '%s/values_%s%s.yaml' % (self.template_dir, key, env)
-                self.out("PROJECT file: ", fn)
-                with open(fn, 'r') as file:
-                    tmp = yaml.safe_load(file)
-                    if info['env'] == 'together':
-                        self.data[key] = tmp[self.env]
-                    else:
-                        self.data[key] = tmp
+        """Lädt alle in ``data_files`` beschriebenen Overlay-Dateien."""
+        self.data = OrderedDict(
+            (name, self._load_data_file(spec))
+            for name, spec in self.data_files.items()
+        )
 
     def load_files(self):
         """Lädt das Basistemplate und anschließend alle Overlay-Dateien."""
-        # load the template file
-        fn = '%s/values_%s.yaml' % (self.template_dir, 'onefitsall')
-        with open(fn, 'r') as f:
-            self.template = yaml.safe_load(f)
-        self.out("TEMPLATE file: ", fn)
-
+        template_path = self.template_dir / self.template_file_name
+        self.template = self._read_yaml_file(template_path)
+        self.out("TEMPLATE file:", str(template_path))
         self.load_files_spec()
-
-    def example(self):
-        """Setzt ein Beispiel für ``data_files`` direkt auf der Instanz.
-
-        Die Methode dient als Referenz für die erwartete Struktur von
-        ``data_files`` und wird aktuell nicht automatisch aufgerufen.
-        """
-        self.data_files = {
-            'creds': {
-                'source': 'private',
-                'transform': 'fill_config_template',
-                'env': 'yes',
-            },
-            'resources': {
-                'source': 'project',
-                'transform': 'fill_simple_template',
-                'env': 'together',
-            },
-            'user': {
-                'source': 'private',
-                'transform': 'fill_config_template',
-                'env': 'no',
-            },
-        }
 
     def fill_configs(self):
         """Wendet alle konfigurierten Overlays in definierter Reihenfolge an."""
-        for key, info in self.data_files.items():
-            if info['transform'] == 'fill_config_template':
-                temp = self.fill_config_template(self.template, self.data[key])
-            elif info['transform'] == 'fill_simple_template':
-                temp = self.fill_simple_template(self.template, self.data[key])
-            else:
-                temp = self.template
-            self.template = temp
+        current_template = self.template
+        for name, spec in self.data_files.items():
+            overlay = self.data[name]
+            current_template = self._apply_transform(current_template, spec, overlay)
+        self.template = current_template
+        self.result = current_template
 
-        self.result = self.template
+    def build_output_path(self, out_dir, env=None):
+        """Berechnet den Zielpfad der generierten Values-Datei."""
+        target_env = env or self.env
+        out_dir = Path(out_dir)
+        return out_dir / f"cf-{target_env}" / f"updated_values-{target_env}.yaml"
 
     def write_output(self, out_dir, env):
         """Schreibt die berechnete Values-Datei in das Ausgabeziel.
@@ -131,19 +132,22 @@ class K8sValuesFill(YamlTemplateFillSupport):
             out_dir: Basisverzeichnis für die Ausgabe.
             env: Name der Zielumgebung; wird in Pfad und Dateiname verwendet.
         """
+        out_path = self.build_output_path(out_dir, env)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
 
-        out_sub = f'{out_dir}/cf-{env}'
-        if not os.path.exists(out_sub):
-            os.makedirs(out_sub)
-
-        out_fp = f'{out_sub}/updated_values-{env}.yaml'
-        if os.path.exists(out_fp):
+        if out_path.exists():
             if self.verbose:
-                print(f'Target output file existed: {out_fp}, making backup')
-            shutil.copy(out_fp, out_fp+'_bak.yaml')
+                print(f"Target output file existed: {out_path}, making backup")
+            backup_path = Path(f"{out_path}_bak.yaml")
+            shutil.copy(out_path, backup_path)
 
+        with out_path.open("w", encoding="utf-8") as file_handle:
+            yaml.dump(self.result, file_handle, default_flow_style=False, sort_keys=False)
+        print("Completed config_values file written to", out_path)
+        return out_path
 
-        with open(out_fp, 'w') as f:
-            yaml.dump(self.result, f, default_flow_style=False)
-        print("Completed config_values file written to ", out_fp)
-
+    def run(self, out_dir):
+        """Führt den vollständigen Workflow vom Laden bis zum Schreiben aus."""
+        self.load_files()
+        self.fill_configs()
+        return self.write_output(out_dir, self.env)

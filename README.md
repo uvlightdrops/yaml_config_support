@@ -21,9 +21,11 @@ Das Muster ist nützlich, wenn du:
 ## Zentrale Bausteine
 
 - `yaml_config_support/cli_config_fill.py`  
-  CLI-Einstiegspunkt. Erwartet ein `options`-Dictionary mit Standardpfaden und `data_files`.
+  CLI-Einstiegspunkt. Erwartet ein `options`-Mapping oder `FillOptions` mit Standardpfaden und `data_files`.
 - `yaml_config_support/k8sValuesFill.py`  
   Lädt Template und Overlay-Dateien und schreibt die Ergebnisdatei.
+- `yaml_config_support/config_models.py`  
+  Enthält die strukturierten Konfigurationsmodelle `FillOptions` und `DataFileSpec`.
 - `yaml_config_support/yamlTemplateFillSupport.py`  
   Implementiert die zwei Füllstrategien:
   - `fill_config_template`: rekursive Dict-Überlagerung
@@ -123,8 +125,40 @@ Die ausführliche Schritt-für-Schritt-Anleitung findest du in:
 
 - `docs/tutorial_cli_config_fill.md`
 
+## Entwicklung und Qualität
+
+Die Projektstruktur wurde bewusst in klarere Zuständigkeiten aufgeteilt:
+
+- strukturierte Optionsmodelle statt impliziter Dict-Manipulation,
+- `pathlib` statt String-Pfadverkettung,
+- klarere Ausnahmen bei fehlenden YAML-Dateien oder Umgebungen,
+- Unittests für Template-Füllung und End-to-End-Workflow.
+
+### Tests ausführen
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+### Temporäre Testverzeichnisse behalten
+
+Für den normalen Discover-Lauf:
+
+```bash
+KEEP_TEST_TEMPDIRS=1 python -m unittest discover -s tests -v
+```
+
+Für den direkten Aufruf von `tests/test_k8s_values_fill.py` gibt es zusätzlich
+ein Flag:
+
+```bash
+python tests/test_k8s_values_fill.py --keep-tempdirs
+```
+
+Wenn der Schalter aktiv ist, wird der Pfad des temporären Testverzeichnisses
+ausgegeben und am Ende nicht gelöscht.
+
 ## Bekannte Hinweise
 
-- Die CLI-Parameter `--ypath_keys` und `--ydict_keys` werden aktuell geparst, aber im Code noch nicht ausgewertet.
 - Das Paket enthält zusätzlich `YamlConfigSupport`, das eine andere YAML-Konfigurationslogik abdeckt. Das Tutorial hier beschreibt gezielt den Template-Fill-Ablauf.
 

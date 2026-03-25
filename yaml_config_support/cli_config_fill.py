@@ -1,65 +1,77 @@
 #!/usr/bin/env python3
 """CLI-Einstiegspunkt zum Erzeugen finaler YAML-Values aus Templates."""
 
+from __future__ import annotations
+
 import argparse
-#from yaml_config_support.K8sValuesFill import K8sValuesFill
+from pathlib import Path
+
+from .config_models import FillOptions
 from .k8sValuesFill import K8sValuesFill
 
-# Globale Variablen und Umgebungsvariablen - default Werte
-"""
-subpath_string = 'dev'
-import os
-home = os.environ['HOME']
-basedir = f'{home}/{subpath_string}/eip-konfigurationen/codefy/helmchart'
-outpath = f'{home}/{subpath_string}/cf'
-options = {
-    'default_template_dir': f'{basedir}/codefy_values',
-    'default_valuestore_dir': f'{home}/codefy_creds',
-    'outpath': outpath,
-}
-"""
 
-def main(options):
+def build_parser(options):
+    """Erzeugt den CLI-Parser für den YAML-Fill-Workflow.
+
+    Args:
+        options: Normalisierte Standardwerte für Template-, Value-Store- und
+            Ausgabe-Pfade.
+
+    Returns:
+        Ein vollständig konfigurierter :class:`argparse.ArgumentParser`.
+    """
+    parser = argparse.ArgumentParser(
+        description="Build a filled YAML config from templates and discrete value stores."
+    )
+    parser.add_argument("env", help="Environment to use (prod, test, dev)")
+    parser.add_argument(
+        "--template_dir",
+        type=Path,
+        default=options.default_template_dir,
+        help="Path to the template main dir (git)",
+    )
+    parser.add_argument(
+        "--valuestore_dir",
+        type=Path,
+        default=options.default_valuestore_dir,
+        help="Path to the dir which holds the values store YAML files",
+    )
+    parser.add_argument("-o", "--outdir", type=Path, help="Directory for output")
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        default=False,
+        help="Verbose output: show each substitution",
+    )
+    return parser
+
+
+def main(options, argv=None):
     """Startet die CLI mit einem projektbezogenen Options-Dictionary.
 
-    Das übergebene ``options``-Dictionary liefert Standardpfade und die
+    Das übergebene ``options``-Objekt liefert Standardpfade und die
     ``data_files``-Beschreibung. Die eigentlichen Laufzeitparameter werden
     anschließend per Kommandozeile geparst.
 
-    Erwartete Schlüssel in ``options``:
-
-    * ``default_template_dir``
-    * ``default_valuestore_dir``
-    * ``outpath``
-    * ``data_files``
-
     Args:
-        options: Projektkonfiguration für Standardpfade und Dateidefinitionen.
+        options: Projektkonfiguration als Mapping oder :class:`FillOptions`.
+        argv: Optionale Argumentliste für Tests oder Programmnutzung.
+
+    Returns:
+        Pfad zur erzeugten Ausgabedatei.
     """
-    parser = argparse.ArgumentParser(description="Test Config Fill")
-    parser.add_argument("env", help="Environment to use (prod, test, dev)")
-    parser.add_argument('--template_dir', type=str, default=options['default_template_dir'],
-                        help='Path to the template main dir (git) ')
-    parser.add_argument('--valuestore_dir', type=str, default=options['default_valuestore_dir'],
-                        help='Path to the dir which hold the valuesstores yaml')
-    parser.add_argument('--ypath_keys', nargs='*', default=['resources'], help='List of keys for yamlpath files')
-    parser.add_argument('--ydict_keys', nargs='*', default=['creds', 'user'], help='List of keys for yamldict files')
-    parser.add_argument("-o", "--outdir", help="Directory for output")
-    parser.add_argument("-v", "--verbose", action='store_true', help="Verbose output: Show each substitution", default=False)
-    args = parser.parse_args()
+    normalized_options = options if isinstance(options, FillOptions) else FillOptions.from_mapping(options)
+    parser = build_parser(normalized_options)
+    args = parser.parse_args(argv)
 
-    #print(options)
-    out_dir = options['outpath']
-    if args.outdir:
-        out_dir = args.outdir
-    template_dir = args.template_dir
-    creds_dir = args.valuestore_dir
+    runtime_options = normalized_options.with_verbose(args.verbose)
+    out_dir = args.outdir or runtime_options.outpath
 
-    CF = K8sValuesFill(args.env, template_dir, creds_dir, options)
-    #CF.options = options
-    CF.load_files()
-    CF.fill_configs()
-    CF.write_output(out_dir, args.env)
-
-#if __name__ == "__main__":
-#    main(options)
+    fill = K8sValuesFill(
+        env=args.env,
+        template_dir=args.template_dir,
+        creds_dir=args.valuestore_dir,
+        options=runtime_options,
+    )
+    return fill.run(out_dir)
