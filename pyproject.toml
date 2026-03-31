@@ -18,3 +18,5 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["yaml_config_support*"]
+exclude = ["build*", "tests*"]
