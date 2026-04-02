@@ -1,9 +1,7 @@
 """Strukturierte Konfigurationsmodelle für den YAML-Fill-Workflow."""
 
-from __future__ import annotations
-
 from collections import OrderedDict
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping, MutableMapping
 
@@ -14,17 +12,17 @@ _VALID_TRANSFORMS = {"fill_config_template", "fill_simple_template"}
 _VALID_ENV_MODES = {"yes", "no", "together"}
 
 
-@dataclass(frozen=True)
-class DataFileSpec:
+class DataFileSpec(object):
     """Beschreibt eine einzelne Overlay-Datei aus `data_files`."""
 
-    name: str
-    source: str
-    transform: str
-    env: str
+    def __init__(self, name, source, transform, env):
+        self.name = name
+        self.source = source
+        self.transform = transform
+        self.env = env
 
     @classmethod
-    def from_mapping(cls, name: str, raw_spec: Mapping[str, Any]) -> "DataFileSpec":
+    def from_mapping(cls, name, raw_spec):
         """Erzeugt und validiert eine Dateispezifikation aus einem Mapping.
 
         Args:
@@ -43,7 +41,7 @@ class DataFileSpec:
         missing = sorted(required_keys.difference(raw_spec.keys()))
         if missing:
             raise DataFileConfigurationError(
-                f"data_files[{name!r}] fehlt: {', '.join(missing)}"
+                "data_files[{!r}] fehlt: {}".format(name, ', '.join(missing))
             )
 
         spec = cls(
@@ -55,22 +53,22 @@ class DataFileSpec:
         spec.validate()
         return spec
 
-    def validate(self) -> None:
+    def validate(self):
         """Validiert die fachlichen Werte der Spezifikation."""
         if self.source not in _VALID_SOURCES:
             raise DataFileConfigurationError(
-                f"Ungültige source für {self.name!r}: {self.source!r}"
+                "Ungültige source für {!r}: {!r}".format(self.name, self.source)
             )
         if self.transform not in _VALID_TRANSFORMS:
             raise DataFileConfigurationError(
-                f"Ungültige transform für {self.name!r}: {self.transform!r}"
+                "Ungültige transform für {!r}: {!r}".format(self.name, self.transform)
             )
         if self.env not in _VALID_ENV_MODES:
             raise DataFileConfigurationError(
-                f"Ungültiger env-Modus für {self.name!r}: {self.env!r}"
+                "Ungültiger env-Modus für {!r}: {!r}".format(self.name, self.env)
             )
 
-    def file_name(self, environment: str) -> str:
+    def file_name(self, environment):
         """Berechnet den Dateinamen passend zur Umgebungsstrategie.
 
         Args:
@@ -79,23 +77,23 @@ class DataFileSpec:
         Returns:
             Der erwartete Dateiname, z. B. ``values_creds_dev.yaml``.
         """
-        suffix = f"_{environment}" if self.env == "yes" else ""
-        return f"values_{self.name}{suffix}.yaml"
+        suffix = "_{}".format(environment) if self.env == "yes" else ""
+        return "values_{}{}.yaml".format(self.name, suffix)
 
 
-@dataclass(frozen=True)
-class FillOptions:
+class FillOptions(object):
     """Normalisierte Paketoptionen für Defaults und Overlay-Definitionen."""
 
-    default_template_dir: Path
-    default_valuestore_dir: Path
-    outpath: Path
-    data_files: "OrderedDict[str, DataFileSpec]"
-    subpath_string: str | None = None
-    verbose: bool = False
+    def __init__(self, default_template_dir, default_valuestore_dir, outpath, data_files, subpath_string=None, verbose=False):
+        self.default_template_dir = default_template_dir
+        self.default_valuestore_dir = default_valuestore_dir
+        self.outpath = outpath
+        self.data_files = data_files
+        self.subpath_string = subpath_string
+        self.verbose = verbose
 
     @classmethod
-    def from_mapping(cls, options: Mapping[str, Any]) -> "FillOptions":
+    def from_mapping(cls, options):
         """Normalisiert ein loses Options-Mapping in eine stabile Struktur.
 
         Args:
@@ -117,14 +115,14 @@ class FillOptions:
         missing = sorted(required.difference(options.keys()))
         if missing:
             raise InvalidOptionsError(
-                f"Options-Mapping fehlt: {', '.join(missing)}"
+                "Options-Mapping fehlt: {}".format(', '.join(missing))
             )
 
         raw_data_files = options["data_files"]
         if not isinstance(raw_data_files, Mapping):
             raise InvalidOptionsError("options['data_files'] muss ein Mapping sein")
 
-        data_files: "OrderedDict[str, DataFileSpec]" = OrderedDict(
+        data_files = OrderedDict(
             (name, DataFileSpec.from_mapping(name, spec))
             for name, spec in raw_data_files.items()
         )
@@ -137,11 +135,18 @@ class FillOptions:
             verbose=bool(options.get("verbose", False)),
         )
 
-    def with_verbose(self, verbose: bool) -> "FillOptions":
+    def with_verbose(self, verbose):
         """Gibt eine Kopie der Optionen mit geänderter Verbose-Einstellung zurück."""
-        return replace(self, verbose=verbose)
+        return FillOptions(
+            default_template_dir=self.default_template_dir,
+            default_valuestore_dir=self.default_valuestore_dir,
+            outpath=self.outpath,
+            data_files=self.data_files,
+            subpath_string=self.subpath_string,
+            verbose=verbose
+        )
 
-    def to_legacy_mapping(self) -> MutableMapping[str, Any]:
+    def to_legacy_mapping(self):
         """Wandelt die Optionen in ein klassisches Dict für Altcode zurück."""
         return {
             "default_template_dir": str(self.default_template_dir),
@@ -158,4 +163,3 @@ class FillOptions:
                 for name, spec in self.data_files.items()
             },
         }
-

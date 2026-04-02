@@ -5,8 +5,6 @@ Das Skript definiert die ``data_files``-Konfiguration und Standardpfade für ein
 konkretes Projektsetup und reicht diese gesammelt an ``main(options)`` weiter.
 """
 
-from __future__ import annotations
-
 from collections import OrderedDict
 from pathlib import Path
 import sys

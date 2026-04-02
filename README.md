@@ -162,3 +162,16 @@ ausgegeben und am Ende nicht gelöscht.
 
 - Das Paket enthält zusätzlich `YamlConfigSupport`, das eine andere YAML-Konfigurationslogik abdeckt. Das Tutorial hier beschreibt gezielt den Template-Fill-Ablauf.
 
+## Python-Version und Kompatibilität
+
+Dieses Repository ist jetzt kompatibel mit Python >=3.6. Für produktive Umgebungen mit Python 3.6 bitte sicherstellen, dass alle Abhängigkeiten (z.B. pyyaml) in einer Version installiert sind, die Python 3.6 unterstützt.
+
+## Shell-Skript für den Aufruf
+
+Ein Beispiel-Skript zum Starten des Tools befindet sich unter `scripts/run_yaml_config_fill.sh`. Mit dem Flag `--keep-temp` können temporäre Dateien nach dem Lauf behalten werden:
+
+```bash
+bash scripts/run_yaml_config_fill.sh dev --keep-temp
+```
+
+Das Skript setzt die Umgebungsvariable `YAML_CONFIG_SUPPORT_KEEP_TEMP=1`, die im Python-Code ausgewertet werden kann, um temporäre Dateien nicht zu löschen.
