@@ -1,7 +1,5 @@
 """Lädt Wertedateien und kombiniert sie zu einer finalen Kubernetes-Values-Datei."""
 
-from __future__ import annotations
-
 from collections import OrderedDict
 from pathlib import Path
 import shutil
