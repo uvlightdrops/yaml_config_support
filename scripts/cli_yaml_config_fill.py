@@ -52,8 +52,11 @@ options = {
     "default_template_dir": template_dir,
     "default_valuestore_dir": valuestore_dir,
     "outpath": outpath,
-    "data_files": data_files,
 }
+#print(options)
+for k, v in options.items():
+    print(k, v)
+options["data_files"] = data_files
 
 
 if __name__ == "__main__":
