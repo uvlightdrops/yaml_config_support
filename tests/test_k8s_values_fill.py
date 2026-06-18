@@ -14,7 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from yaml_config_support.cli_config_fill import main
 from yaml_config_support.config_models import FillOptions
-from yaml_config_support.exceptions import MissingEnvironmentError
+from yaml_config_support.exceptions import EmptyYamlFileError, MissingEnvironmentError
 from yaml_config_support.k8sValuesFill import K8sValuesFill
 
 
@@ -67,6 +67,11 @@ class K8sValuesFillWorkflowTests(unittest.TestCase):
             "default_template_dir": self.template_dir,
             "default_valuestore_dir": self.secret_dir,
             "outpath": self.out_dir,
+            "data_file_defaults": {
+                "source": "project",
+                "transform": "fill_simple_template",
+                "env": "together",
+            },
             "data_files": OrderedDict(
                 [
                     (
@@ -77,14 +82,7 @@ class K8sValuesFillWorkflowTests(unittest.TestCase):
                             "env": "yes",
                         },
                     ),
-                    (
-                        "resources",
-                        {
-                            "source": "project",
-                            "transform": "fill_simple_template",
-                            "env": "together",
-                        },
-                    ),
+                    ("resources", {}),
                     (
                         "user",
                         {
@@ -136,7 +134,7 @@ class K8sValuesFillWorkflowTests(unittest.TestCase):
         )
 
         self.assertTrue(result_path.exists())
-        self.assertEqual(result_path.name, "updated_values-dev.yaml")
+        self.assertEqual(result_path.name, "values_onefitsall-dev.yaml")
 
     def test_missing_environment_in_together_file_raises_clear_error(self):
         self._write_yaml(
@@ -147,6 +145,118 @@ class K8sValuesFillWorkflowTests(unittest.TestCase):
         fill = K8sValuesFill("qa", self.template_dir, self.secret_dir, options)
 
         with self.assertRaises(MissingEnvironmentError):
+            fill.load_files_spec()
+
+    def test_empty_yaml_file_raises_clear_error(self):
+        (self.secret_dir / "values_user.yaml").write_text("", encoding="utf-8")
+        fill = K8sValuesFill("dev", self.template_dir, self.secret_dir, self.options)
+
+        with self.assertRaises(EmptyYamlFileError):
+            fill.load_files_spec()
+
+    def test_multiple_template_files_and_overrides_are_supported(self):
+        self._write_yaml(
+            self.template_dir / "base_template.yaml",
+            {
+                "spec": {
+                    "template": {
+                        "spec": {
+                            "securityContext": {"runAsNonRoot": False},
+                            "containers": [{"name": "wls-admin", "image": "old:image"}],
+                        }
+                    }
+                }
+            },
+        )
+        self._write_yaml(
+            self.template_dir / "security_overlay.yaml",
+            {"spec": {"template": {"spec": {"securityContext": {"runAsNonRoot": True}}}}},
+        )
+        self._write_yaml(
+            self.template_dir / "image_overlay.yaml",
+            {"lists": {"spec.template.spec.containers": [{"name": "wls-admin", "image": "new:image"}]}},
+        )
+
+        options = {
+            "default_template_dir": self.template_dir,
+            "default_valuestore_dir": self.secret_dir,
+            "outpath": self.out_dir,
+            "template_defaults": {
+                "source": "project",
+                "transform": "fill_config_template",
+            },
+            "template_files": [
+                "base_template.yaml",
+                "security_overlay.yaml",
+                {"path": "image_overlay.yaml", "transform": "fill_simple_template"},
+            ],
+            "data_files": OrderedDict(),
+        }
+
+        fill = K8sValuesFill("dev", self.template_dir, self.secret_dir, options)
+        result_path = fill.run(self.out_dir)
+
+        with result_path.open("r", encoding="utf-8") as file_handle:
+            result = yaml.safe_load(file_handle)
+        self.assertTrue(result["spec"]["template"]["spec"]["securityContext"]["runAsNonRoot"])
+        self.assertEqual(result["spec"]["template"]["spec"]["containers"][0]["image"], "new:image")
+
+    def test_fill_options_applies_data_file_defaults_and_overrides(self):
+        options = FillOptions.from_mapping(self.options)
+        self.assertEqual(options.data_files["resources"].transform, "fill_simple_template")
+        self.assertEqual(options.data_files["resources"].source, "project")
+        self.assertEqual(options.data_files["resources"].env, "together")
+        self.assertEqual(options.data_files["creds"].source, "private")
+        self.assertEqual(options.data_files["creds"].transform, "fill_config_template")
+        self.assertEqual(options.template_files[0].path, "values_onefitsall.yaml")
+
+    def test_fallback_env_uses_specific_file_when_present(self):
+        """Bei env='fallback': nimmt values_resources_dev.yaml wenn vorhanden."""
+        self._write_yaml(
+            self.template_dir / "values_resources_dev.yaml",
+            {"resources.limits.cpu": "999m"},
+        )
+        options = dict(self.options)
+        options["data_file_defaults"] = {
+            "source": "project",
+            "transform": "fill_simple_template",
+            "env": "fallback",
+        }
+        fill = K8sValuesFill("dev", self.template_dir, self.secret_dir, options)
+        fill.load_files()
+        self.assertEqual(fill.data["resources"]["resources.limits.cpu"], "999m")
+
+    def test_fallback_env_uses_general_file_when_no_specific(self):
+        """Bei env='fallback': fällt auf values_resources.yaml zurück wenn keine spez. Datei."""
+        # values_resources_dev.yaml existiert NICHT, aber values_resources.yaml
+        # (die "together"-Variante aus setUp) wird als general-Datei verwendet,
+        # jedoch OHNE Env-Extraktion – direkt von oben gelesen
+        self._write_yaml(
+            self.template_dir / "values_resources.yaml",
+            {"resources.limits.cpu": "fallback-value"},
+        )
+        options = dict(self.options)
+        options["data_file_defaults"] = {
+            "source": "project",
+            "transform": "fill_simple_template",
+            "env": "fallback",
+        }
+        fill = K8sValuesFill("dev", self.template_dir, self.secret_dir, options)
+        fill.load_files()
+        self.assertEqual(fill.data["resources"]["resources.limits.cpu"], "fallback-value")
+
+    def test_fallback_env_raises_when_neither_file_exists(self):
+        """Bei env='fallback': YamlFileAccessError wenn weder spez. noch allg. Datei vorhanden."""
+        from yaml_config_support.exceptions import YamlFileAccessError
+        (self.template_dir / "values_resources.yaml").unlink()
+        options = dict(self.options)
+        options["data_file_defaults"] = {
+            "source": "project",
+            "transform": "fill_simple_template",
+            "env": "fallback",
+        }
+        fill = K8sValuesFill("dev", self.template_dir, self.secret_dir, options)
+        with self.assertRaises(YamlFileAccessError):
             fill.load_files_spec()
 
 

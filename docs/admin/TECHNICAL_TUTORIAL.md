@@ -307,10 +307,14 @@ python scripts/cli_yaml_config_fill.py dev \
 Die Ergebnisdatei landet unter:
 
 ```text
-<outdir>/cf-dev/updated_values-dev.yaml
+<outdir>/<template-name>-<env>.yaml
 ```
 
-Wenn die Datei bereits existiert, wird vorher eine Sicherung mit dem Suffix `_bak.yaml` angelegt.
+Beispiel für Template `deploy-wls-admin.yaml` und Umgebung `dev`:
+
+```text
+/tmp/example/out/deploy-wls-admin-dev.yaml
+```
 
 ---
 
@@ -385,14 +389,16 @@ wird der vorhandene Eintrag mit `name: LOG_LEVEL` gefunden und aktualisiert.
 Nach dem Lauf schreibt `K8sValuesFill.write_output()` die finale Datei nach:
 
 ```text
-<outdir>/cf-<env>/updated_values-<env>.yaml
+<outdir>/<template-name>-<env>.yaml
 ```
 
-Beispiel:
+Der Dateiname wird vom Template-Namen abgeleitet. Beispiel:
 
 ```text
-/tmp/example/out/cf-dev/updated_values-dev.yaml
+/tmp/example/out/deploy-wls-admin-dev.yaml
 ```
+
+Wenn die Datei bereits existiert, wird vorher eine Sicherung mit dem Suffix `_bak.yaml` angelegt.
 
 ---
 
