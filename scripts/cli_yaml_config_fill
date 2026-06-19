@@ -23,6 +23,7 @@ fi
 
 run_script() {
   local bin="$1"
+  shift
   exec "$bin" "$SCRIPT_PATH" "$@"
 }
 
