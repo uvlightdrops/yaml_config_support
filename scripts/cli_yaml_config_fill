@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Optional explicit override, e.g.:
+#   PYTHON_BIN=python3.11 cli_yaml_config_fill --overlay manual
+PYTHON_BIN="${PYTHON_BIN:-}"
+
+# Realen Speicherort des Wrappers auflösen (funktioniert auch durch Symlinks wie $HOME/bin)
+_SELF="$(realpath "$0")"
+_TOOLS_DIR="$(dirname "$_SELF")"
+_REPO_DIR="$(dirname "$_TOOLS_DIR")"
+
+# cli_yaml_config_fill.py liegt in einem Schwester-Repo unter $HOME
+# (analog zu Path.home() in env_wl_flowpad.py)
+_DEFAULT_SCRIPT="$HOME/dev_flow/yaml_config_support/scripts/cli_yaml_config_fill.py"
+SCRIPT_PATH="${YAML_FILL_SCRIPT:-$_DEFAULT_SCRIPT}"
+
+if [[ ! -f "$SCRIPT_PATH" ]]; then
+  echo "ERROR: cli_yaml_config_fill.py nicht gefunden: $SCRIPT_PATH" >&2
+  echo "       Setze YAML_FILL_SCRIPT=/pfad/zur/cli_yaml_config_fill.py" >&2
+  exit 127
+fi
+
+run_script() {
+  local bin="$1"
+  exec "$bin" "$SCRIPT_PATH" "$@"
+}
+
+if [[ -n "$PYTHON_BIN" ]]; then
+  run_script "$PYTHON_BIN" "$@"
+fi
+
+for bin in python3.12 python3.11 python3.10 python3; do
+  if command -v "$bin" >/dev/null 2>&1; then
+    run_script "$bin" "$@"
+  fi
+done
+
+echo "ERROR: Kein Python-Interpreter gefunden (mindestens 3.10)." >&2
+exit 127
+
+
+
+

@@ -15,7 +15,12 @@ template_defaults = {
     "source": "project",
     "transform": "fill_config_template",
 }
-template_files = [template_file_name]
+template_files = [
+    "deploy-wls-admin.yaml",
+    "deploy-wls-managed-1.yaml",
+    "deploy-wls-managed-2.yaml",
+    "deploy-wls-managed-3.yaml",
+]
 
 data_file_defaults = {
     "source": "project",

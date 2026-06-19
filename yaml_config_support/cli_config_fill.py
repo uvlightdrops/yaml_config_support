@@ -36,7 +36,7 @@ def build_parser(options):
         default=options.default_valuestore_dir,
         help="Path to the dir which holds the values store YAML files",
     )
-    parser.add_argument("-o", "--outdir", type=Path, help="Directory for output")
+    parser.add_argument("-o", "--outdir", type=Path, help="Directory for output (default: 'out')")
     parser.add_argument(
         "-v",
         "--verbose",

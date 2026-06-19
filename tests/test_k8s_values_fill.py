@@ -154,14 +154,13 @@ class K8sValuesFillWorkflowTests(unittest.TestCase):
         with self.assertRaises(EmptyYamlFileError):
             fill.load_files_spec()
 
-    def test_multiple_template_files_and_overrides_are_supported(self):
+    def test_multiple_template_files_apply_data_to_each_template(self):
         self._write_yaml(
-            self.template_dir / "base_template.yaml",
+            self.template_dir / "deploy-a.yaml",
             {
                 "spec": {
                     "template": {
                         "spec": {
-                            "securityContext": {"runAsNonRoot": False},
                             "containers": [{"name": "wls-admin", "image": "old:image"}],
                         }
                     }
@@ -169,12 +168,16 @@ class K8sValuesFillWorkflowTests(unittest.TestCase):
             },
         )
         self._write_yaml(
-            self.template_dir / "security_overlay.yaml",
-            {"spec": {"template": {"spec": {"securityContext": {"runAsNonRoot": True}}}}},
-        )
-        self._write_yaml(
-            self.template_dir / "image_overlay.yaml",
-            {"lists": {"spec.template.spec.containers": [{"name": "wls-admin", "image": "new:image"}]}},
+            self.template_dir / "deploy-b.yaml",
+            {
+                "spec": {
+                    "template": {
+                        "spec": {
+                            "containers": [{"name": "wls-managed", "image": "old:image"}],
+                        }
+                    }
+                }
+            },
         )
 
         options = {
@@ -185,21 +188,46 @@ class K8sValuesFillWorkflowTests(unittest.TestCase):
                 "source": "project",
                 "transform": "fill_config_template",
             },
-            "template_files": [
-                "base_template.yaml",
-                "security_overlay.yaml",
-                {"path": "image_overlay.yaml", "transform": "fill_simple_template"},
-            ],
-            "data_files": OrderedDict(),
+            "template_files": ["deploy-a.yaml", "deploy-b.yaml"],
+            "data_file_defaults": {
+                "source": "project",
+                "transform": "fill_simple_template",
+                "env": "no",
+            },
+            "data_files": OrderedDict(
+                [
+                    (
+                        "resources",
+                        {
+                            "source": "project",
+                            "transform": "fill_simple_template",
+                            "env": "no",
+                        },
+                    )
+                ]
+            ),
         }
+        self._write_yaml(
+            self.template_dir / "values_resources.yaml",
+            {"spec.template.spec.containers[0].image": "new:image"},
+        )
 
         fill = K8sValuesFill("dev", self.template_dir, self.secret_dir, options)
-        result_path = fill.run(self.out_dir)
+        result_paths = fill.run(self.out_dir)
 
-        with result_path.open("r", encoding="utf-8") as file_handle:
-            result = yaml.safe_load(file_handle)
-        self.assertTrue(result["spec"]["template"]["spec"]["securityContext"]["runAsNonRoot"])
-        self.assertEqual(result["spec"]["template"]["spec"]["containers"][0]["image"], "new:image")
+        self.assertEqual(len(result_paths), 2)
+        result_a = self.out_dir / "deploy-a-dev.yaml"
+        result_b = self.out_dir / "deploy-b-dev.yaml"
+        self.assertTrue(result_a.exists())
+        self.assertTrue(result_b.exists())
+
+        with result_a.open("r", encoding="utf-8") as file_handle:
+            data_a = yaml.safe_load(file_handle)
+        with result_b.open("r", encoding="utf-8") as file_handle:
+            data_b = yaml.safe_load(file_handle)
+
+        self.assertEqual(data_a["spec"]["template"]["spec"]["containers"][0]["image"], "new:image")
+        self.assertEqual(data_b["spec"]["template"]["spec"]["containers"][0]["image"], "new:image")
 
     def test_fill_options_applies_data_file_defaults_and_overrides(self):
         options = FillOptions.from_mapping(self.options)
@@ -209,6 +237,37 @@ class K8sValuesFillWorkflowTests(unittest.TestCase):
         self.assertEqual(options.data_files["creds"].source, "private")
         self.assertEqual(options.data_files["creds"].transform, "fill_config_template")
         self.assertEqual(options.template_files[0].path, "values_onefitsall.yaml")
+
+    def test_concat_template_documents_writes_multi_doc_yaml(self):
+        self._write_yaml(
+            self.template_dir / "deploy-a.yaml",
+            {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "a"}},
+        )
+        self._write_yaml(
+            self.template_dir / "deploy-b.yaml",
+            {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": "b"}},
+        )
+
+        options = {
+            "default_template_dir": self.template_dir,
+            "default_valuestore_dir": self.secret_dir,
+            "outpath": self.out_dir,
+            "template_defaults": {
+                "source": "project",
+                "transform": "concat_template_documents",
+            },
+            "template_files": ["deploy-a.yaml", "deploy-b.yaml"],
+            "data_files": OrderedDict(),
+        }
+
+        fill = K8sValuesFill("dev", self.template_dir, self.secret_dir, options)
+        result_path = fill.run(self.out_dir)
+
+        with result_path.open("r", encoding="utf-8") as file_handle:
+            docs = list(yaml.safe_load_all(file_handle))
+        self.assertEqual(len(docs), 2)
+        self.assertEqual(docs[0]["metadata"]["name"], "a")
+        self.assertEqual(docs[1]["metadata"]["name"], "b")
 
     def test_fallback_env_uses_specific_file_when_present(self):
         """Bei env='fallback': nimmt values_resources_dev.yaml wenn vorhanden."""

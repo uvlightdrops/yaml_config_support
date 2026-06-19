@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from copy import deepcopy
 from pathlib import Path
 import shutil
 
@@ -41,6 +42,8 @@ class K8sValuesFill(YamlTemplateFillSupport):
         self.env = env
         self.data_files = self.options.data_files
         self.data = OrderedDict()
+        self.template_entries = []
+        self.template_mode = "single"
         self.template = {}
         self.result = {}
 
@@ -113,8 +116,48 @@ class K8sValuesFill(YamlTemplateFillSupport):
         return base_dir / spec.file_name(self.env)
 
     def load_template_files(self):
-        """Lädt eine oder mehrere Template-Dateien und kombiniert sie in Reihenfolge."""
+        """Lädt Template-Dateien.
+
+        Modi:
+        - ``single``: ein Template
+        - ``per_template``: mehrere Templates, jeweils getrennt weiterverarbeiten
+        - ``concat``: mehrere Templates als Multi-Document bündeln
+        """
         first_spec, *overlay_specs = self.template_files
+
+        if first_spec.transform == "concat_template_documents":
+            self.template_mode = "concat"
+            documents = []
+            entries = []
+            for spec in self.template_files:
+                template_path = self._resolve_file_path(spec)
+                payload = self._read_yaml_file(template_path)
+                self.out("TEMPLATE concat:", str(template_path))
+                if spec.transform != "concat_template_documents":
+                    raise ValueError(
+                        "Bei concat_template_documents muessen alle template_files denselben transform verwenden"
+                    )
+                entries.append((spec, template_path, payload))
+                documents.append(payload)
+            self.template_entries = entries
+            self.template = documents
+            return documents
+
+        if len(self.template_files) > 1:
+            self.template_mode = "per_template"
+            entries = []
+            templates = []
+            for spec in self.template_files:
+                template_path = self._resolve_file_path(spec)
+                payload = self._read_yaml_file(template_path)
+                self.out("TEMPLATE file:", str(template_path))
+                entries.append((spec, template_path, payload))
+                templates.append(payload)
+            self.template_entries = entries
+            self.template = templates
+            return templates
+
+        self.template_mode = "single"
         template_path = self._resolve_file_path(first_spec)
         current_template = self._read_yaml_file(template_path)
         self.out("TEMPLATE file:", str(template_path))
@@ -126,6 +169,7 @@ class K8sValuesFill(YamlTemplateFillSupport):
             current_template = self._apply_transform(current_template, spec, overlay)
 
         self.template = current_template
+        self.template_entries = [(first_spec, template_path, current_template)]
         return current_template
 
     def _apply_transform(self, template, spec, overlay):
@@ -150,6 +194,18 @@ class K8sValuesFill(YamlTemplateFillSupport):
 
     def fill_configs(self):
         """Wendet alle konfigurierten Overlays in definierter Reihenfolge an."""
+        if self.template_mode in {"per_template", "concat"}:
+            results = []
+            for _spec, _path, template_payload in self.template_entries:
+                current_template = deepcopy(template_payload)
+                for name, spec in self.data_files.items():
+                    overlay = self.data[name]
+                    current_template = self._apply_transform(current_template, spec, overlay)
+                results.append(current_template)
+            self.template = results
+            self.result = results
+            return
+
         current_template = self.template
         for name, spec in self.data_files.items():
             overlay = self.data[name]
@@ -157,7 +213,7 @@ class K8sValuesFill(YamlTemplateFillSupport):
         self.template = current_template
         self.result = current_template
 
-    def build_output_path(self, out_dir, env=None):
+    def build_output_path(self, out_dir, env=None, template_path=None):
         """Berechnet den Zielpfad der generierten Values-Datei.
         
         Der Ausgabedateiname wird vom ersten Template-Dateinamen abgeleitet,
@@ -168,8 +224,10 @@ class K8sValuesFill(YamlTemplateFillSupport):
         target_env = env or self.env
         out_dir = Path(out_dir)
         
-        # Hole Template-Dateinamen vom ersten Template
-        if hasattr(self.template_files[0], 'path'):
+        # Hole Template-Dateinamen vom angegebenen oder ersten Template
+        if template_path is not None:
+            base_template_path = str(template_path)
+        elif hasattr(self.template_files[0], 'path'):
             base_template_path = self.template_files[0].path
         else:
             base_template_path = str(self.template_files[0])
@@ -193,6 +251,22 @@ class K8sValuesFill(YamlTemplateFillSupport):
             out_dir: Basisverzeichnis für die Ausgabe.
             env: Name der Zielumgebung; wird im Dateinamen verwendet.
         """
+        if isinstance(self.result, list) and self.template_mode == "per_template":
+            written_paths = []
+            for (spec, template_path, _payload), result_doc in zip(self.template_entries, self.result):
+                out_path = self.build_output_path(out_dir, env, template_path=spec.path)
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                if out_path.exists():
+                    if self.verbose:
+                        print(f"Target output file existed: {out_path}, making backup")
+                    backup_path = Path(f"{out_path}_bak.yaml")
+                    shutil.copy(out_path, backup_path)
+                with out_path.open("w", encoding="utf-8") as file_handle:
+                    yaml.dump(result_doc, file_handle, default_flow_style=False, sort_keys=False)
+                print("Completed config_values file written to", out_path)
+                written_paths.append(out_path)
+            return written_paths
+
         out_path = self.build_output_path(out_dir, env)
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -203,7 +277,10 @@ class K8sValuesFill(YamlTemplateFillSupport):
             shutil.copy(out_path, backup_path)
 
         with out_path.open("w", encoding="utf-8") as file_handle:
-            yaml.dump(self.result, file_handle, default_flow_style=False, sort_keys=False)
+            if isinstance(self.result, list):
+                yaml.dump_all(self.result, file_handle, default_flow_style=False, sort_keys=False)
+            else:
+                yaml.dump(self.result, file_handle, default_flow_style=False, sort_keys=False)
         print("Completed config_values file written to", out_path)
         return out_path
 

@@ -10,7 +10,12 @@ from typing import Any, Mapping, MutableMapping
 from .exceptions import DataFileConfigurationError, InvalidOptionsError
 
 _VALID_SOURCES = {"private", "project"}
-_VALID_TRANSFORMS = {"fill_config_template", "fill_simple_template"}
+_VALID_DATA_TRANSFORMS = {"fill_config_template", "fill_simple_template"}
+_VALID_TEMPLATE_TRANSFORMS = {
+    "fill_config_template",
+    "fill_simple_template",
+    "concat_template_documents",
+}
 _VALID_ENV_MODES = {"yes", "no", "together", "fallback"}
 
 
@@ -74,7 +79,7 @@ class DataFileSpec:
             raise DataFileConfigurationError(
                 f"Ungültige source für {self.name!r}: {self.source!r}"
             )
-        if self.transform not in _VALID_TRANSFORMS:
+        if self.transform not in _VALID_DATA_TRANSFORMS:
             raise DataFileConfigurationError(
                 f"Ungültige transform für {self.name!r}: {self.transform!r}"
             )
@@ -157,7 +162,7 @@ class TemplateFileSpec:
         )
         if spec.source not in _VALID_SOURCES:
             raise InvalidOptionsError(f"Ungültige source für template_files: {spec.source!r}")
-        if spec.transform not in _VALID_TRANSFORMS:
+        if spec.transform not in _VALID_TEMPLATE_TRANSFORMS:
             raise InvalidOptionsError(f"Ungültige transform für template_files: {spec.transform!r}")
         return spec
 
@@ -180,6 +185,8 @@ class FillOptions:
 
         Args:
             options: Rohes Mapping, wie es aus einem Wrapper-Skript kommt.
+                Erforderlich: 'default_template_dir', 'default_valuestore_dir', 'data_files'.
+                Optional: 'outpath' (standardmäßig 'out'), 'template_files', 'subpath_string', 'verbose'.
 
         Returns:
             Eine validierte Instanz von :class:`FillOptions`.
@@ -191,7 +198,6 @@ class FillOptions:
         required = {
             "default_template_dir",
             "default_valuestore_dir",
-            "outpath",
             "data_files",
         }
         missing = sorted(required.difference(options.keys()))
@@ -233,7 +239,7 @@ class FillOptions:
         return cls(
             default_template_dir=Path(options["default_template_dir"]),
             default_valuestore_dir=Path(options["default_valuestore_dir"]),
-            outpath=Path(options["outpath"]),
+            outpath=Path(options.get("outpath", "out")),
             data_files=data_files,
             template_files=template_files,
             template_file_name=template_files[0].path,
