@@ -4,10 +4,18 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
-from .config_models import FillOptions
-from .k8sValuesFill import K8sValuesFill
+try:
+    from .config_models import FillOptions
+    from .k8sValuesFill import K8sValuesFill
+except ImportError:  # Direkter Skriptaufruf ohne Paketkontext
+    package_root = Path(__file__).resolve().parents[1]
+    if str(package_root) not in sys.path:
+        sys.path.insert(0, str(package_root))
+    from yaml_config_support.config_models import FillOptions
+    from yaml_config_support.k8sValuesFill import K8sValuesFill
 
 
 def build_parser(options):
@@ -75,3 +83,12 @@ def main(options, argv=None):
         options=runtime_options,
     )
     return fill.run(out_dir)
+
+
+if __name__ == "__main__":
+    raise SystemExit(
+        "Dieses Modul erwartet ein Projekt-Options-Mapping und ist kein Standalone-CLI.\n"
+        "Nutze stattdessen: python scripts/cli_yaml_config_fill.py <env>"
+    )
+
+

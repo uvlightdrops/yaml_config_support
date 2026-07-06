@@ -69,13 +69,17 @@ def build_options(overlay_name: str):
     dynamic_template_dir = Path(template_dir) / "overlays" / overlay_name
     if not dynamic_template_dir.exists():
         raise SystemExit(f"Overlay-Verzeichnis nicht gefunden: {dynamic_template_dir}")
+
+    # Nutze template_collect_dir, um automatisch alle YAMLs aus dem Overlay zu sammeln
+    # Fallback auf template_files aus env.py, falls nicht leer
     return {
         "subpath_string": str(basedir),
         "default_template_dir": dynamic_template_dir,
         "default_valuestore_dir": valuestore_dir,
         "outpath": outpath,
         "template_defaults": template_defaults,
-        "template_files": template_files,
+        "template_collect_dir": str(dynamic_template_dir),  # NEU: auto-collect YAMLs
+        "template_files": template_files,  # Fallback aus env.py
         "data_file_defaults": data_file_defaults,
         "data_files": data_files,
     }

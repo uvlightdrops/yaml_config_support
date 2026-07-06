@@ -39,6 +39,7 @@ class K8sValuesFill(YamlTemplateFillSupport):
         self.template_files = self.options.template_files
         self.template_dir = Path(template_dir)
         self.creds_dir = Path(creds_dir)
+        self.template_collect_dir = Path(self.options.template_collect_dir) if self.options.template_collect_dir else None
         self.env = env
         self.data_files = self.options.data_files
         self.data = OrderedDict()
@@ -109,7 +110,16 @@ class K8sValuesFill(YamlTemplateFillSupport):
         return payload[self.env]
 
     def _resolve_file_path(self, spec):
-        """Berechnet den konkreten Dateipfad für Daten- oder Template-Spezifikationen."""
+        """Berechnet den konkreten Dateipfad für Daten- oder Template-Spezifikationen.
+        
+        Falls template_collect_dir gesetzt ist und es eine Template-Spec ist (hat 'path'-Attribut),
+        wird der Pfad relativ zu template_collect_dir aufgelöst.
+        Ansonsten wird der Standard-Mechanismus (base_dir) verwendet.
+        """
+        # Für Template-Specs mit template_collect_dir: direkt von dort laden
+        if self.template_collect_dir and hasattr(spec, "path"):
+            return self.template_collect_dir / spec.path
+        
         base_dir = self._resolve_source_dir(spec)
         if hasattr(spec, "path"):
             return base_dir / spec.path

@@ -318,11 +318,54 @@ class K8sValuesFillWorkflowTests(unittest.TestCase):
         with self.assertRaises(YamlFileAccessError):
             fill.load_files_spec()
 
+    def test_template_collect_dir_loads_all_yaml_files(self):
+        """template_collect_dir sammelt automatisch alle *.yaml Dateien aus einem Verzeichnis."""
+        # Erstelle ein Overlay-Verzeichnis mit mehreren YAMLs
+        overlay_dir = self.base_dir / "overlays" / "manual"
+        overlay_dir.mkdir(parents=True)
+        self._write_yaml(
+            overlay_dir / "deployment.yaml",
+            {
+                "apiVersion": "apps/v1",
+                "kind": "Deployment",
+                "metadata": {"name": "app"},
+            },
+        )
+        self._write_yaml(
+            overlay_dir / "service.yaml",
+            {
+                "apiVersion": "v1",
+                "kind": "Service",
+                "metadata": {"name": "app-svc"},
+            },
+        )
+        
+        # Options mit template_collect_dir
+        options = dict(self.options)
+        options["template_collect_dir"] = str(overlay_dir)
+        options["data_files"] = OrderedDict([
+            (
+                "creds",
+                {
+                    "source": "private",
+                    "transform": "fill_config_template",
+                    "env": "yes",
+                },
+            ),
+        ])
+        
+        fill = K8sValuesFill("dev", self.template_dir, self.secret_dir, options)
+        fill.load_files()
+        
+        # Es sollten 2 Templates geladen sein (deployment.yaml, service.yaml)
+        self.assertEqual(fill.template_mode, "per_template")
+        self.assertEqual(len(fill.template), 2)
+        self.assertEqual(fill.template[0]["kind"], "Deployment")
+        self.assertEqual(fill.template[1]["kind"], "Service")
+
 
 if __name__ == "__main__":
     if "--keep-tempdirs" in sys.argv:
         os.environ["KEEP_TEST_TEMPDIRS"] = "1"
         sys.argv.remove("--keep-tempdirs")
     unittest.main()
-
-

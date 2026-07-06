@@ -178,6 +178,7 @@ class FillOptions:
     template_file_name: str = "values_onefitsall.yaml"
     subpath_string: str | None = None
     verbose: bool = False
+    template_collect_dir: str | None = None  # NEU: auto-collect YAML files from dir
 
     @classmethod
     def from_mapping(cls, options: Mapping[str, Any]) -> "FillOptions":
@@ -223,11 +224,25 @@ class FillOptions:
         if template_defaults and not isinstance(template_defaults, Mapping):
             raise InvalidOptionsError("options['template_defaults'] muss ein Mapping sein")
 
-        raw_template_files = options.get("template_files")
-        if raw_template_files is None:
-            raw_template_files = [options.get("template_file_name", "values_onefitsall.yaml")]
-        elif isinstance(raw_template_files, (str, Path)):
-            raw_template_files = [raw_template_files]
+        # NEU: template_collect_dir — sammelt alle YAMLs aus dem Verzeichnis
+        template_collect_dir = options.get("template_collect_dir")
+        if template_collect_dir:
+            collect_path = Path(template_collect_dir)
+            if not collect_path.is_dir():
+                raise InvalidOptionsError(f"template_collect_dir existiert nicht: {collect_path}")
+            # Sammle alle .yaml/.yml Dateien, sortiert (nur Namen, werden relativ zu default_template_dir gesucht)
+            yaml_files = sorted(
+                list(collect_path.glob("*.yaml")) + list(collect_path.glob("*.yml"))
+            )
+            if not yaml_files:
+                raise InvalidOptionsError(f"Keine YAML-Dateien in {collect_path} gefunden")
+            raw_template_files = [f.name for f in yaml_files]
+        else:
+            raw_template_files = options.get("template_files")
+            if raw_template_files is None:
+                raw_template_files = [options.get("template_file_name", "values_onefitsall.yaml")]
+            elif isinstance(raw_template_files, (str, Path)):
+                raw_template_files = [raw_template_files]
 
         template_files = tuple(
             TemplateFileSpec.from_raw(raw_spec, template_defaults)
@@ -245,6 +260,7 @@ class FillOptions:
             template_file_name=template_files[0].path,
             subpath_string=options.get("subpath_string"),
             verbose=bool(options.get("verbose", False)),
+            template_collect_dir=str(template_collect_dir) if template_collect_dir else None,
         )
 
     def with_verbose(self, verbose: bool) -> "FillOptions":
