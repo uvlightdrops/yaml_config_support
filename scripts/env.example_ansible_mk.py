@@ -66,6 +66,8 @@ data_files = OrderedDict(
                 "source": "project",
                 "transform": "fill_simple_template",
                 "env": "together",
+                "file": "values_resources.yaml",
+                "targets": ["deploy-*.yaml"],
             },
         ),
         (
@@ -74,6 +76,8 @@ data_files = OrderedDict(
                 "source": "private",
                 "transform": "fill_config_template",
                 "env": "yes",  # values_creds_dev.yaml, values_creds_prod.yaml
+                "file": "values_creds_{env}.yaml",
+                "targets": ["*"],
             },
         ),
     ]

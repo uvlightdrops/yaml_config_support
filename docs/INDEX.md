@@ -1,14 +1,14 @@
-# 📚 Admin-Dokumentation: Überblick
+# Dokumentation: Technik, Architektur und Usage
 
-Willkommen! Diese Dokumentation hilft dir, **YAML-Templates automatisch zu füllen** – für verschiedene Umgebungen (dev, prod, staging, etc.) ohne manuelle Bearbeitung.
+Willkommen! Diese Dokumentation fokussiert auf **technische Architekturentscheidungen**, **Usage-Anleitungen** und **praxisnahe Beispiele** für den YAML-Fill-Workflow.
 
 ---
 
-## 📖 Dokumentation nach Verwendungsfall
+## Dokumentation nach Verwendungsfall
 
 Wähle je nach deiner Erfahrung:
 
-### 🟢 **Anfänger? Starte hier:**
+### Einstieg und Praxis
 
 | Datei | Inhalt | Zeit |
 |-------|--------|------|
@@ -16,14 +16,14 @@ Wähle je nach deiner Erfahrung:
 | **[CHEAT_SHEET.md](CHEAT_SHEET.md)** | Schnelle Referenz zum Nachschlagen | 5 Min |
 | **[EXAMPLE_PROJECT.md](EXAMPLE_PROJECT.md)** | Aufbau eines funktionierenden Beispiels | 10 Min |
 
-### 🔵 **Erfahren? Schneller Überblick:**
+### Referenz und Deep-Dive
 
 | Datei | Inhalt |
 |-------|--------|
 | **[CHEAT_SHEET.md](CHEAT_SHEET.md)** | Alle wichtigen Befehle & Fehler |
 | **[TECHNICAL_TUTORIAL.md](TECHNICAL_TUTORIAL.md)** | Tiefes technisches Verständnis |
 
-### 🟣 **Für Python-Entwickler:**
+### Python-Entwicklung
 
 | Datei | Inhalt |
 |-------|--------|
@@ -68,14 +68,15 @@ Der Ausgabedateiname wird vom Template-Namen abgeleitet (z.B. `deploy-wls-admin.
 
 ---
 
-## 📁 Verzeichnisstruktur
+## Verzeichnisstruktur
 
 ```
-docs/admin/
-├── README.md                    ← START HIER (für Anfänger)
-├── CHEAT_SHEET.md              ← Schnelle Befehle & Fehler
-├── EXAMPLE_PROJECT.md          ← Praktisches Beispiel zum Nachbauen
-├── TECHNICAL_TUTORIAL.md       ← Für Techniker & Python-Nutzer
+docs/
+├── README.md                   ← Ausführliche Usage-Anleitung
+├── CHEAT_SHEET.md              ← Schnelle Referenz
+├── EXAMPLE_PROJECT.md          ← End-to-End-Beispiel
+├── TECHNICAL_TUTORIAL.md       ← Architektur und Interna
+├── TEMPLATE_COLLECT_FEATURE.md ← Feature-Details
 └── INDEX.md                    ← Diese Datei
 ```
 
@@ -120,7 +121,7 @@ Beispiel: `outpath/deploy-wls-admin-dev.yaml`
 
 ---
 
-## 💬 Fragen?
+## Nächste Leseempfehlung
 
 1. **Anleitung nicht klar?** → Lies [README.md](README.md)
 2. **Befehl nicht erinnert?** → Schau [CHEAT_SHEET.md](CHEAT_SHEET.md)
@@ -129,7 +130,7 @@ Beispiel: `outpath/deploy-wls-admin-dev.yaml`
 
 ---
 
-**Version:** 1.0  
-**Zuletzt aktualisiert:** 2025  
-**Zielgruppe:** Administratoren und DevOps-Team
+**Version:** 1.1  
+**Zuletzt aktualisiert:** 2026  
+**Zielgruppe:** Entwickler, Plattform- und DevOps-Teams
 

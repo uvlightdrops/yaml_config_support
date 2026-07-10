@@ -4,6 +4,9 @@ import argparse
 import sys
 import os
 from pathlib import Path
+from importlib import import_module
+
+import yaml
 
 MIN_PYTHON = (3, 10)
 if sys.version_info < MIN_PYTHON:
@@ -33,29 +36,83 @@ if _caller_dir not in sys.path:
 if _script_dir not in sys.path:
     sys.path.insert(1, _script_dir)
 
-#from yaml_config_support.baseValuesFill import BaseValuesFill
+from yaml_config_support.env_validator import validate_env_config
 from yaml_config_support.cli_config_fill import main
-from env import (
-    basedir,
-    data_file_defaults,
-    data_files,
-    outpath,
-    target_env,
-    template_defaults,
-    template_dir,
-    template_files,
-    valuestore_dir,
-)
 
-def parse_args(argv=None):
+
+def _load_yaml_env_config(path: Path) -> dict:
+    try:
+        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as e:
+        raise SystemExit(f"YAML-Fehler in {path}: {e}")
+    if not isinstance(payload, dict):
+        raise SystemExit(f"Ungueltige YAML-Konfiguration in {path}: Mapping erwartet")
+    validate_env_config(payload, path)
+    return payload
+
+
+def _to_path(value):
+    return Path(value) if value is not None else None
+
+
+def _normalize_config(raw: dict, source: Path | str) -> dict:
+    required = ["basedir", "template_dir", "valuestore_dir", "outpath", "data_files"]
+    missing = [key for key in required if key not in raw]
+    if missing:
+        raise SystemExit(f"Konfiguration {source} unvollstaendig, fehlt: {', '.join(missing)}")
+
+    return {
+        "basedir": _to_path(raw["basedir"]),
+        "template_dir": _to_path(raw["template_dir"]),
+        "template_collect_dir": _to_path(raw.get("template_collect_dir")),
+        "valuestore_dir": _to_path(raw["valuestore_dir"]),
+        "outpath": _to_path(raw["outpath"]),
+        "target_env": raw.get("target_env", "dev"),
+        "template_defaults": raw.get(
+            "template_defaults", {"source": "project", "transform": "fill_config_template"}
+        ),
+        "template_files": raw.get("template_files", []),
+        "data_file_defaults": raw.get("data_file_defaults", {}),
+        "data_files": raw["data_files"],
+    }
+
+
+def load_project_config() -> dict:
+    # Prioritaet: env.yaml/env.yml im Aufruferverzeichnis, dann env.py
+    yaml_candidates = [
+        Path.cwd() / "env.yaml",
+        Path.cwd() / "env.yml",
+        Path(_script_dir) / "env.yaml",
+        Path(_script_dir) / "env.yml",
+    ]
+    for candidate in yaml_candidates:
+        if candidate.exists():
+            return _normalize_config(_load_yaml_env_config(candidate), candidate)
+
+    env_module = import_module("env")
+    raw = {
+        "basedir": getattr(env_module, "basedir"),
+        "template_dir": getattr(env_module, "template_dir"),
+        "template_collect_dir": getattr(env_module, "template_collect_dir", None),
+        "valuestore_dir": getattr(env_module, "valuestore_dir"),
+        "outpath": getattr(env_module, "outpath"),
+        "target_env": getattr(env_module, "target_env", "dev"),
+        "template_defaults": getattr(env_module, "template_defaults", {}),
+        "template_files": getattr(env_module, "template_files", []),
+        "data_file_defaults": getattr(env_module, "data_file_defaults", {}),
+        "data_files": getattr(env_module, "data_files"),
+    }
+    return _normalize_config(raw, "env.py")
+
+def parse_args(default_env, argv=None):
     parser = argparse.ArgumentParser(
         description="Fill overlay manifests and write generated files to configured outpath."
     )
     parser.add_argument(
         "env",
         nargs="?",
-        default=target_env,
-        help="Environment suffix for value lookup/output naming (default from env.py)",
+        default=default_env,
+        help="Environment suffix for value lookup/output naming (default from env config)",
     )
     parser.add_argument(
         "--overlay",
@@ -65,29 +122,31 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
-def build_options(overlay_name: str):
-    dynamic_template_dir = Path(template_dir) / "overlays" / overlay_name
-    if not dynamic_template_dir.exists():
-        raise SystemExit(f"Overlay-Verzeichnis nicht gefunden: {dynamic_template_dir}")
+def build_options(config: dict, overlay_name: str):
+    template_dir = config["template_dir"]
+    explicit_collect_dir = config["template_collect_dir"]
+    overlay_dir = explicit_collect_dir or (template_dir / "overlays" / overlay_name)
+    if not overlay_dir.exists():
+        raise SystemExit(f"Overlay-Verzeichnis nicht gefunden: {overlay_dir}")
 
-    # Nutze template_collect_dir, um automatisch alle YAMLs aus dem Overlay zu sammeln
-    # Fallback auf template_files aus env.py, falls nicht leer
+    # Wichtig: project-data_files (z.B. values_resources.yaml) werden relativ zum
+    # Template-Root gesucht, nicht im Overlay-Verzeichnis.
     return {
-        "subpath_string": str(basedir),
-        "default_template_dir": dynamic_template_dir,
-        "default_valuestore_dir": valuestore_dir,
-        "outpath": outpath,
-        "template_defaults": template_defaults,
-        "template_collect_dir": str(dynamic_template_dir),  # NEU: auto-collect YAMLs
-        "template_files": template_files,  # Fallback aus env.py
-        "data_file_defaults": data_file_defaults,
-        "data_files": data_files,
+        "subpath_string": str(config["basedir"]),
+        "default_template_dir": Path(template_dir),
+        "default_valuestore_dir": config["valuestore_dir"],
+        "outpath": config["outpath"],
+        "template_defaults": config["template_defaults"],
+        "template_collect_dir": str(overlay_dir),
+        "template_files": config["template_files"],
+        "data_file_defaults": config["data_file_defaults"],
+        "data_files": config["data_files"],
     }
 
 
 if __name__ == "__main__":
-    cli_args = parse_args()
+    config = load_project_config()
+    cli_args = parse_args(config["target_env"])
     overlay_name = cli_args.overlay or cli_args.env
-    options = build_options(overlay_name)
+    options = build_options(config, overlay_name)
     main(options, argv=[cli_args.env])
-

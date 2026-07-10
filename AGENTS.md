@@ -42,6 +42,7 @@ Projektspezifischer Wrapper mit Defaults:
 - `default_valuestore_dir`
 - `data_files` Mapping
 - Output-Pfade
+- Konfiguration aus `env.yaml`/`env.yml` (bevorzugt) oder `env.py`
 
 ---
 
@@ -80,6 +81,8 @@ data_files = {
         "source": "private",           # oder "project"
         "transform": "fill_config_template",  # oder "fill_simple_template"
         "env": "yes",                  # oder "no", "together", "fallback"
+        "file": "values_creds_{env}.yaml",   # optional: expliziter Dateiname
+        "targets": ["*"],                    # optional: Ziel-Templates (Glob)
     },
     "resources": {
         "source": "project",
@@ -122,7 +125,7 @@ options = {
 "template_collect_dir": "k8s/overlays/manual",
 ```
 
-Siehe auch: `docs/admin/TEMPLATE_COLLECT_FEATURE.md`
+Siehe auch: `docs/TEMPLATE_COLLECT_FEATURE.md`
 
 ---
 

@@ -206,9 +206,11 @@ class K8sValuesFill(YamlTemplateFillSupport):
         """Wendet alle konfigurierten Overlays in definierter Reihenfolge an."""
         if self.template_mode in {"per_template", "concat"}:
             results = []
-            for _spec, _path, template_payload in self.template_entries:
+            for template_spec, _path, template_payload in self.template_entries:
                 current_template = deepcopy(template_payload)
                 for name, spec in self.data_files.items():
+                    if not spec.applies_to_template(template_spec.path):
+                        continue
                     overlay = self.data[name]
                     current_template = self._apply_transform(current_template, spec, overlay)
                 results.append(current_template)
@@ -217,7 +219,10 @@ class K8sValuesFill(YamlTemplateFillSupport):
             return
 
         current_template = self.template
+        template_path = self.template_files[0].path if self.template_files else None
         for name, spec in self.data_files.items():
+            if not spec.applies_to_template(template_path):
+                continue
             overlay = self.data[name]
             current_template = self._apply_transform(current_template, spec, overlay)
         self.template = current_template

@@ -1,6 +1,6 @@
-# Admin-Anleitung: YAML-Templates automatisch füllen
+# Technische Anleitung: YAML-Templates automatisch füllen
 
-## 🎯 Worum geht es?
+## Worum geht es?
 
 Du hast eine **YAML-Konfigurationsdatei** (z. B. Kubernetes-Manifest), die für verschiedene Umgebungen unterschiedliche Werte braucht:
 
@@ -16,7 +16,7 @@ Statt diese Datei manuell zu kopieren und zu bearbeiten, **generiert dieses Skri
 
 ---
 
-## 🚀 Schnelleinstieg (5 Minuten)
+## Schnelleinstieg (5 Minuten)
 
 ### Schritt 1: Konfiguration anpassen
 
@@ -96,7 +96,7 @@ Der Dateiname wird automatisch vom Template abgeleitet (z. B. `deploy-wls-admin.
 
 ---
 
-## 📋 Dateistruktur verstehen
+## Dateistruktur verstehen
 
 Die Struktur könnte so aussehen:
 
@@ -114,7 +114,7 @@ mein_projekt/
 
 ---
 
-## 🔧 Häufige Aufgaben
+## Häufige Aufgaben
 
 ### Task 1: Für eine andere Umgebung generieren
 
@@ -249,7 +249,7 @@ prod:
 
 ---
 
-## ❌ Fehlerbehebung
+## Fehlerbehebung
 
 ### Fehler: `FileNotFoundError: values_resources.yaml not found`
 
@@ -302,7 +302,7 @@ python3 scripts/cli_yaml_config_fill.py
 
 ---
 
-## 💡 Tipps
+## Tipps
 
 1. **Basis-Template mit Defaults**  
    Füll das Basis-Template mit sensible Standardwerte (z. B. Ports, Ressourcen). Die Werte-Dateien überschreiben dann nur, was anders sein soll.
@@ -323,7 +323,7 @@ python3 scripts/cli_yaml_config_fill.py
 
 ---
 
-## 📚 Weiterführende Ressourcen
+## Weiterführende Ressourcen
 
 Für **technische Details**, siehe:
 
@@ -333,7 +333,7 @@ Für **technische Details**, siehe:
 
 ---
 
-## ❓ Fragen?
+## Fragen?
 
 Bei Problemen:
 

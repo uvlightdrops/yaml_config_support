@@ -46,8 +46,8 @@ template_collect_dir = "k8s/overlays/manual"
 |---|---|
 | `AGENTS.md` | ✅ Aktualisiert: NEU-Sektion zur Feature |
 | `CHANGELOG_TEMPLATE_COLLECT.md` | ✅ Vollständiges Changelog |
-| `docs/admin/TEMPLATE_COLLECT_FEATURE.md` | ✅ Technische Referenzdokumentation |
-| `docs/admin/QUICKSTART_TEMPLATE_COLLECT.md` | ✅ Praktisches Tutorial & Beispiele |
+| `docs/TEMPLATE_COLLECT_FEATURE.md` | ✅ Technische Referenzdokumentation |
+| `docs/QUICKSTART_TEMPLATE_COLLECT.md` | ✅ Praktisches Tutorial & Beispiele |
 
 ---
 
@@ -249,8 +249,8 @@ def build_options(overlay_name: str):
 ## Support & Fragen
 
 **Dokumentation:**
-- `docs/admin/QUICKSTART_TEMPLATE_COLLECT.md` — Anfänger
-- `docs/admin/TEMPLATE_COLLECT_FEATURE.md` — Technik
+- `docs/QUICKSTART_TEMPLATE_COLLECT.md` — Anfänger
+- `docs/TEMPLATE_COLLECT_FEATURE.md` — Technik
 - `CHANGELOG_TEMPLATE_COLLECT.md` — Was ist neu
 - `AGENTS.md` — Überblick
 

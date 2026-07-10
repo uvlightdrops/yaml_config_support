@@ -14,7 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from yaml_config_support.cli_config_fill import main
 from yaml_config_support.config_models import FillOptions
-from yaml_config_support.exceptions import EmptyYamlFileError, MissingEnvironmentError
+from yaml_config_support.exceptions import DataFileConfigurationError, EmptyYamlFileError, MissingEnvironmentError
 from yaml_config_support.k8sValuesFill import K8sValuesFill
 
 
@@ -234,9 +234,146 @@ class K8sValuesFillWorkflowTests(unittest.TestCase):
         self.assertEqual(options.data_files["resources"].transform, "fill_simple_template")
         self.assertEqual(options.data_files["resources"].source, "project")
         self.assertEqual(options.data_files["resources"].env, "together")
+        self.assertEqual(options.data_files["resources"].targets, ("*",))
         self.assertEqual(options.data_files["creds"].source, "private")
         self.assertEqual(options.data_files["creds"].transform, "fill_config_template")
         self.assertEqual(options.template_files[0].path, "values_onefitsall.yaml")
+
+    def test_data_file_targets_apply_only_to_matching_templates(self):
+        self._write_yaml(
+            self.template_dir / "deploy-a.yaml",
+            {
+                "apiVersion": "apps/v1",
+                "kind": "Deployment",
+                "spec": {
+                    "template": {
+                        "spec": {
+                            "containers": [{"name": "app", "image": "old:image"}],
+                        }
+                    }
+                },
+            },
+        )
+        self._write_yaml(
+            self.template_dir / "kustomization.yaml",
+            {
+                "apiVersion": "kustomize.config.k8s.io/v1beta1",
+                "kind": "Kustomization",
+                "resources": ["deploy-a.yaml"],
+            },
+        )
+        self._write_yaml(
+            self.secret_dir / "values_harbour_dev.yaml",
+            {"spec.template.spec.containers[0].image": "new:image"},
+        )
+
+        options = {
+            "default_template_dir": self.template_dir,
+            "default_valuestore_dir": self.secret_dir,
+            "outpath": self.out_dir,
+            "template_files": ["deploy-a.yaml", "kustomization.yaml"],
+            "data_files": OrderedDict(
+                [
+                    (
+                        "harbour",
+                        {
+                            "source": "private",
+                            "transform": "fill_simple_template",
+                            "env": "yes",
+                            "targets": ["deploy-*.yaml"],
+                        },
+                    )
+                ]
+            ),
+        }
+
+        fill = K8sValuesFill("dev", self.template_dir, self.secret_dir, options)
+        result_paths = fill.run(self.out_dir)
+        self.assertEqual(len(result_paths), 2)
+
+        with (self.out_dir / "deploy-a-dev.yaml").open("r", encoding="utf-8") as file_handle:
+            deploy_data = yaml.safe_load(file_handle)
+        with (self.out_dir / "kustomization-dev.yaml").open("r", encoding="utf-8") as file_handle:
+            kustomization_data = yaml.safe_load(file_handle)
+
+        self.assertEqual(deploy_data["spec"]["template"]["spec"]["containers"][0]["image"], "new:image")
+        self.assertEqual(kustomization_data["kind"], "Kustomization")
+        self.assertEqual(kustomization_data["resources"], ["deploy-a.yaml"])
+
+    def test_data_file_custom_file_name_with_env_placeholder(self):
+        self._write_yaml(
+            self.secret_dir / "registry-dev.yaml",
+            {"service": {"port": 9090}},
+        )
+        options = {
+            "default_template_dir": self.template_dir,
+            "default_valuestore_dir": self.secret_dir,
+            "outpath": self.out_dir,
+            "data_files": OrderedDict(
+                [
+                    (
+                        "registry",
+                        {
+                            "source": "private",
+                            "transform": "fill_config_template",
+                            "env": "yes",
+                            "file": "registry-{env}.yaml",
+                        },
+                    )
+                ]
+            ),
+        }
+
+        fill = K8sValuesFill("dev", self.template_dir, self.secret_dir, options)
+        result_path = fill.run(self.out_dir)
+        with result_path.open("r", encoding="utf-8") as file_handle:
+            result = yaml.safe_load(file_handle)
+        self.assertEqual(result["service"]["port"], 9090)
+
+    def test_data_file_custom_file_is_invalid_for_fallback(self):
+        options = dict(self.options)
+        options["data_files"] = OrderedDict(
+            [
+                (
+                    "resources",
+                    {
+                        "source": "project",
+                        "transform": "fill_simple_template",
+                        "env": "fallback",
+                        "file": "values_resources.yaml",
+                    },
+                )
+            ]
+        )
+
+        with self.assertRaises(DataFileConfigurationError):
+            FillOptions.from_mapping(options)
+
+    def test_env_mode_normalizes_yaml_bool_values(self):
+        options = dict(self.options)
+        options["data_files"] = OrderedDict(
+            [
+                (
+                    "creds",
+                    {
+                        "source": "private",
+                        "transform": "fill_config_template",
+                        "env": True,
+                    },
+                ),
+                (
+                    "user",
+                    {
+                        "source": "private",
+                        "transform": "fill_config_template",
+                        "env": False,
+                    },
+                ),
+            ]
+        )
+        normalized = FillOptions.from_mapping(options)
+        self.assertEqual(normalized.data_files["creds"].env, "yes")
+        self.assertEqual(normalized.data_files["user"].env, "no")
 
     def test_concat_template_documents_writes_multi_doc_yaml(self):
         self._write_yaml(

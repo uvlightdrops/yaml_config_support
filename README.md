@@ -51,6 +51,11 @@ Der einfachste Einstieg ist ein Wrapper wie `scripts/cli_yaml_config_fill.py`. D
 - `outpath`
 - `data_files`
 
+Konfigurationsquelle des Wrappers:
+
+- `env.yaml` oder `env.yml` im Aufruferverzeichnis (hat Vorrang)
+- sonst wie bisher `env.py`
+
 ### 2. CLI aufrufen
 
 ```bash
@@ -74,11 +79,15 @@ data_files = {
         "source": "private",
         "transform": "fill_config_template",
         "env": "yes",
+        "file": "values_creds_{env}.yaml",
+        "targets": ["*"],
     },
     "resources": {
         "source": "project",
         "transform": "fill_simple_template",
         "env": "together",
+        "file": "values_resources.yaml",
+        "targets": ["deploy-*.yaml"],
     },
     "user": {
         "source": "private",
@@ -100,6 +109,13 @@ Bedeutung der Felder:
   - `yes`: Dateiname enthält die Umgebung, z. B. `values_creds_dev.yaml`
   - `no`: Dateiname ist umgebungsunabhängig, z. B. `values_user.yaml`
   - `together`: Datei enthält mehrere Umgebungen als Ober-Schlüssel; es wird `tmp[self.env]` verwendet
+  - `fallback`: sucht zuerst env-spezifisch, dann env-neutral
+- `file` (optional)
+  - expliziter Dateiname statt `values_<key>...`
+  - unterstützt `{env}`, z. B. `values_harbour_{env}.yaml`
+- `targets` (optional)
+  - Liste von Dateimustern (Glob) für Template-Dateinamen, z. B. `deploy-*.yaml`
+  - Standard: `[*]` (Overlay gilt für alle Templates)
 
 > Die Reihenfolge der Einträge in `data_files` ist wichtig, weil genau diese Reihenfolge die Overlays bestimmt.
 
@@ -118,6 +134,8 @@ Für einen Schlüssel `<key>` in `data_files` werden folgende Muster verwendet:
 - bei `env == "yes"`: `values_<key>_<env>.yaml`
 - bei `env == "no"`: `values_<key>.yaml`
 - bei `env == "together"`: `values_<key>.yaml`
+
+Wenn `file` gesetzt ist, wird dieser Dateiname verwendet.
 
 ## Tutorial
 

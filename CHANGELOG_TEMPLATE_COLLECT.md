@@ -46,7 +46,7 @@
 ### Dokumentation
 
 📖 **Neue Datei:**
-- `docs/admin/TEMPLATE_COLLECT_FEATURE.md`: Vollständige Dokumentation
+- `docs/TEMPLATE_COLLECT_FEATURE.md`: Vollständige Dokumentation
 
 📝 **Aktualisiert:**
 - `AGENTS.md`: NEU-Sektion mit `template_collect_dir` Erklärung

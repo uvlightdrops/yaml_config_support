@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fnmatch import fnmatch
 from collections import OrderedDict
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -26,6 +27,12 @@ def _merge_defaults(raw_spec: Mapping[str, Any] | None, defaults: Mapping[str, A
     return merged
 
 
+def _normalize_env_mode(raw_env: Any) -> str:
+    if isinstance(raw_env, bool):
+        return "yes" if raw_env else "no"
+    return str(raw_env).strip().lower()
+
+
 @dataclass(frozen=True)
 class DataFileSpec:
     """Beschreibt eine einzelne Overlay-Datei aus `data_files`."""
@@ -34,6 +41,8 @@ class DataFileSpec:
     source: str
     transform: str
     env: str
+    file: str | None = None
+    targets: tuple[str, ...] = ("*",)
 
     @classmethod
     def from_mapping(
@@ -64,11 +73,26 @@ class DataFileSpec:
                 f"data_files[{name!r}] fehlt: {', '.join(missing)}"
             )
 
+        raw_targets = merged_spec.get("targets", ("*",))
+        if isinstance(raw_targets, str):
+            normalized_targets = (raw_targets,)
+        elif isinstance(raw_targets, (list, tuple)):
+            normalized_targets = tuple(str(item) for item in raw_targets)
+        else:
+            raise DataFileConfigurationError(
+                f"data_files[{name!r}].targets muss String oder Liste sein"
+            )
+
+        raw_file = merged_spec.get("file")
+        custom_file = str(raw_file) if raw_file else None
+
         spec = cls(
             name=name,
             source=str(merged_spec["source"]),
             transform=str(merged_spec["transform"]),
-            env=str(merged_spec["env"]),
+            env=_normalize_env_mode(merged_spec["env"]),
+            file=custom_file,
+            targets=normalized_targets,
         )
         spec.validate()
         return spec
@@ -87,6 +111,21 @@ class DataFileSpec:
             raise DataFileConfigurationError(
                 f"Ungültiger env-Modus für {self.name!r}: {self.env!r}"
             )
+        if self.file and self.env == "fallback":
+            raise DataFileConfigurationError(
+                f"Ungültige Kombination für {self.name!r}: 'file' wird bei env='fallback' nicht unterstützt"
+            )
+        if not self.targets:
+            raise DataFileConfigurationError(
+                f"Ungültige targets für {self.name!r}: mindestens ein Muster erforderlich"
+            )
+
+    def applies_to_template(self, template_path: str | Path | None) -> bool:
+        """Prüft, ob dieses Data-Overlay auf das gegebene Template angewendet wird."""
+        if template_path is None:
+            return True
+        template_name = Path(template_path).name
+        return any(fnmatch(template_name, pattern) for pattern in self.targets)
 
     def file_name(self, environment: str) -> str:
         """Berechnet den primären Dateinamen passend zur Umgebungsstrategie.
@@ -97,6 +136,8 @@ class DataFileSpec:
         Returns:
             Der erwartete Dateiname, z. B. ``values_creds_dev.yaml``.
         """
+        if self.file:
+            return self.file.replace("{env}", environment)
         suffix = f"_{environment}" if self.env == "yes" else ""
         return f"values_{self.name}{suffix}.yaml"
 
@@ -289,6 +330,8 @@ class FillOptions:
                     "source": spec.source,
                     "transform": spec.transform,
                     "env": spec.env,
+                    "file": spec.file,
+                    "targets": list(spec.targets),
                 }
                 for name, spec in self.data_files.items()
             },
