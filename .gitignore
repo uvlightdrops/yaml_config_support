@@ -9,5 +9,4 @@ __pycache__/
 build/
 
 *.env
-env_*
 env.py
